@@ -1,0 +1,114 @@
+# Minimal Debian Bookworm-based Development Container
+# Base: Debian 12 (Bookworm) Slim - stable LTS with glibc compatibility
+FROM debian:bookworm-slim
+
+# Avoid prompts from apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Set default user and paths
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+# ==============================================================================
+# SYSTEM ESSENTIALS
+# ==============================================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    openssh-client \
+    socat \
+    procps \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# ==============================================================================
+# DEVELOPMENT UTILITIES
+# ==============================================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    jq \
+    less \
+    ripgrep \
+    tree \
+    unzip \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Helix, Just, yq
+RUN HELIX_VERSION="25.01.1" \
+    && JUST_VERSION="1.37.0" \
+    && YQ_VERSION="v4.44.6" \
+    && ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "arm64" ]; then \
+        HELIX_ARCH="aarch64"; \
+        JUST_ARCH="aarch64-unknown-linux-musl"; \
+        YQ_ARCH="arm64"; \
+    else \
+        HELIX_ARCH="x86_64"; \
+        JUST_ARCH="x86_64-unknown-linux-musl"; \
+        YQ_ARCH="amd64"; \
+    fi \
+    && curl -fsSL "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-${HELIX_ARCH}-linux.tar.xz" -o helix.tar.xz \
+    && tar -xJf helix.tar.xz \
+    && mv helix-${HELIX_VERSION}-${HELIX_ARCH}-linux /usr/local/helix \
+    && ln -s /usr/local/helix/hx /usr/local/bin/hx \
+    && rm helix.tar.xz \
+    && curl -fsSL "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}.tar.gz" -o just.tar.gz \
+    && tar -xzf just.tar.gz \
+    && mv just /usr/local/bin/just \
+    && rm just.tar.gz \
+    && curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH}" -o /usr/local/bin/yq \
+    && chmod +x /usr/local/bin/yq
+
+# ==============================================================================
+# LANGUAGE RUNTIMES & BUILD TOOLS
+# ==============================================================================
+
+# C/C++ build tools (for cubiomes, bedrock seed tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22.x (for AI CLI tools)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# ==============================================================================
+# AI TOOLS
+# ==============================================================================
+RUN npm install -g \
+    @anthropic-ai/claude-code \
+    @openai/codex \
+    && npm cache clean --force
+
+# deliberate-thinking MCP server
+RUN ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "arm64" ]; then DT_ARCH="aarch64-unknown-linux-gnu"; else DT_ARCH="x86_64-unknown-linux-gnu"; fi \
+    && DT_VERSION="0.1.0" \
+    && curl -fsSL "https://github.com/kljensen/deliberate-thinking/releases/download/v${DT_VERSION}/deliberate-thinking-rust-${DT_ARCH}.tar.xz" -o dt.tar.xz \
+    && tar -xJf dt.tar.xz \
+    && mv deliberate-thinking-rust-${DT_ARCH}/deliberate-thinking-server /usr/local/bin/ \
+    && rm -rf dt.tar.xz deliberate-thinking-rust-*
+
+# ==============================================================================
+# USER SETUP
+# ==============================================================================
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+
+WORKDIR /workspace
+USER $USERNAME
+CMD ["/bin/bash"]
