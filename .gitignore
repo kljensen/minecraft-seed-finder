@@ -1,0 +1,9 @@
+# Zig build artifacts
+.zig-cache/
+zig-out/
+
+# Local scratch/reference downloads
+tmp/
+
+# Local assistant tooling state
+.claude/
