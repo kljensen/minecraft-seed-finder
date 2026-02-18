@@ -1,26 +1,7 @@
 const std = @import("std");
 
-const cubiomes_sources = [_][]const u8{
-    "lib/cubiomes/noise.c",
-    "lib/cubiomes/biomes.c",
-    "lib/cubiomes/layers.c",
-    "lib/cubiomes/biomenoise.c",
-    "lib/cubiomes/generator.c",
-    "lib/cubiomes/finders.c",
-    "lib/cubiomes/util.c",
-    "lib/cubiomes/quadbase.c",
-    "lib/bedrockref/Bfinders.c",
-};
-
-fn linkCubiomes(step: *std.Build.Step.Compile, b: *std.Build) void {
+fn linkRuntime(step: *std.Build.Step.Compile) void {
     step.linkLibC();
-    step.addIncludePath(b.path("lib/cubiomes"));
-    step.addIncludePath(b.path("lib/bedrockref"));
-    step.addIncludePath(b.path("lib"));
-    step.addCSourceFiles(.{
-        .files = &cubiomes_sources,
-        .flags = &.{ "-O3", "-fwrapv" },
-    });
     step.linkSystemLibrary("m");
 }
 
@@ -34,7 +15,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    linkCubiomes(exe, b);
+    linkRuntime(exe);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -43,12 +24,23 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the seed finder");
     run_step.dependOn(&run_cmd.step);
 
-    const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/bedrock_test.zig"),
+    const gen_vectors = b.addExecutable(.{
+        .name = "gen-parity-vectors",
+        .root_source_file = b.path("src/gen_parity_vectors.zig"),
         .target = target,
         .optimize = optimize,
     });
-    linkCubiomes(unit_tests, b);
+    linkRuntime(gen_vectors);
+    const run_gen_vectors = b.addRunArtifact(gen_vectors);
+    const gen_step = b.step("gen-parity-vectors", "Generate parity golden vectors");
+    gen_step.dependOn(&run_gen_vectors.step);
+
+    const unit_tests = b.addTest(.{
+        .root_source_file = b.path("src/all_tests.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    linkRuntime(unit_tests);
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run tests");

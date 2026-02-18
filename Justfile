@@ -2,9 +2,14 @@
 
 DEV_IMAGE := "minecraft-seed-finder-dev"
 DEV_VOLUME := "minecraft-seed-finder-claude-credentials"
+CLAUDE_OAUTH := env_var_or_default("CLAUDE_CODE_CONTAINER_OAUTH_TOKEN", "")
 
 default:
     @just --list
+
+# Differential fuzzing against extracted C reference
+fuzz ROUNDS="8":
+    scripts/diff_fuzz.sh {{ROUNDS}}
 
 # Build the dev container
 dev-build:
@@ -12,7 +17,7 @@ dev-build:
 
 # Drop into a dev shell
 dev-shell: _dev-ensure-image
-    docker run -it --rm \
+    @docker run -it --rm --init \
         -v "$(pwd):/workspace" \
         -v "{{DEV_VOLUME}}:/home/vscode/.claude" \
         -v "$HOME/.codex:/home/vscode/.codex" \
@@ -23,11 +28,13 @@ dev-shell: _dev-ensure-image
         -e OPENAI_API_KEY \
         -e GITHUB_TOKEN \
         -e TAVILY_API_KEY \
+        -e TERM=xterm-256color \
+        -e CLAUDE_CODE_OAUTH_TOKEN="{{CLAUDE_OAUTH}}" \
         {{DEV_IMAGE}}
 
 # Run a command in the dev container
 dev-run CMD: _dev-ensure-image
-    docker run -it --rm \
+    docker run -it --rm --init \
         -v "$(pwd):/workspace" \
         -v "{{DEV_VOLUME}}:/home/vscode/.claude" \
         -e ANTHROPIC_API_KEY \

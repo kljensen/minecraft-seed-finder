@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("c_bindings.zig").c;
+const c = @import("c_bindings.zig");
 const bedrock = @import("bedrock.zig");
 const biome_names = @import("biome_names.zig");
 

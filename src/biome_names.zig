@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("c_bindings.zig").c;
+const c = @import("c_bindings.zig");
 
 pub const SupportedBiome = struct {
     name: []const u8,

@@ -1,6 +1,1 @@
-pub const c = @cImport({
-    @cInclude("biomes.h");
-    @cInclude("generator.h");
-    @cInclude("finders.h");
-    @cInclude("Bfinders.h");
-});
+pub usingnamespace @import("cubiomes_port.zig");
