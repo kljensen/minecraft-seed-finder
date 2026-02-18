@@ -41,6 +41,7 @@ dev-rebuild:
 # Test container tools
 dev-test: _dev-ensure-image
     @docker run --rm {{DEV_IMAGE}} bash -c "\
+        echo 'Zig:' && zig version && \
         echo 'Node:' && node --version && \
         echo 'Claude:' && (claude --version 2>/dev/null || echo 'installed') && \
         echo 'gcc:' && gcc --version | head -1 && \
