@@ -360,6 +360,14 @@ fn parseAnchor(spec: []const u8) ?c.Pos {
     return .{ .x = x, .z = z };
 }
 
+fn splitMix64(state: *u64) u64 {
+    state.* +%= 0x9E3779B97F4A7C15;
+    var z = state.*;
+    z = (z ^ (z >> 30)) *% 0xBF58476D1CE4E5B9;
+    z = (z ^ (z >> 27)) *% 0x94D049BB133111EB;
+    return z ^ (z >> 31);
+}
+
 fn parseNbtTagPayload(
     reader: *NbtReader,
     tag_id: u8,
@@ -785,6 +793,8 @@ fn printUsage(writer: anytype) !void {
             "  --start-seed <u64>                   First seed to test (default: 0)\n" ++
             "  --max-seed <u64>                     Stop scanning after this seed\n" ++
             "  --count <N>                          Number of matches to output\n" ++
+            "  --random                             Sample random seeds instead of linear scan\n" ++
+            "  --random-samples <N>                 Test N random samples (requires --random)\n" ++
             "  --require-biome <name:radius>        Repeatable biome filter (keys b1,b2,...)\n" ++
             "  --require-structure <name:radius>    Repeatable structure filter (keys s1,s2,...)\n" ++
             "  --where <expr>                       Boolean expression over bN/sN/cN\n" ++
@@ -803,7 +813,10 @@ fn printUsage(writer: anytype) !void {
             "  --help                               Show help\n\n" ++
             "Expression examples:\n" ++
             "  --where \"b1 and (s1 or s2) and not b3\"\n" ++
-            "  --where \"c1 and c2 and (c3 or c4)\"\n",
+            "  --where \"c1 and c2 and (c3 or c4)\"\n\n" ++
+            "Random sampling examples:\n" ++
+            "  --random --random-samples 1000000    Test 1M random seeds\n" ++
+            "  --random --count 10                  Find 10 matches from random seeds\n",
         .{},
     );
 }
@@ -875,6 +888,8 @@ pub fn main() !void {
     var do_resume = false;
     var level_dat_path: ?[]const u8 = null;
     var start_seed_explicit = false;
+    var random_mode = false;
+    var random_samples: ?u64 = null;
 
     var biome_idx: usize = 0;
     var structure_idx: usize = 0;
@@ -927,6 +942,11 @@ pub fn main() !void {
             checkpoint_every = try std.fmt.parseInt(u64, s, 10);
         } else if (std.mem.eql(u8, arg, "--resume")) {
             do_resume = true;
+        } else if (std.mem.eql(u8, arg, "--random")) {
+            random_mode = true;
+        } else if (std.mem.eql(u8, arg, "--random-samples")) {
+            const s = args.next() orelse return error.InvalidArguments;
+            random_samples = try std.fmt.parseInt(u64, s, 10);
         } else if (std.mem.eql(u8, arg, "--require-biome")) {
             const spec = args.next() orelse return error.InvalidArguments;
             const parsed = parseNameRadius(spec) orelse return error.InvalidArguments;
@@ -975,8 +995,10 @@ pub fn main() !void {
     }
 
     if (count == 0) return error.InvalidArguments;
-    if (start_seed > max_seed) return error.InvalidArguments;
-    if (ranked and max_seed == std.math.maxInt(u64)) return error.InvalidArguments;
+    if (random_mode and start_seed_explicit) return error.InvalidArguments;
+    if (random_mode and do_resume) return error.InvalidArguments;
+    if (!random_mode and start_seed > max_seed) return error.InvalidArguments;
+    if (!random_mode and ranked and max_seed == std.math.maxInt(u64)) return error.InvalidArguments;
 
     var idx: usize = 0;
     while (idx < constraints.items.len) : (idx += 1) {
@@ -1057,7 +1079,17 @@ pub fn main() !void {
 
     const start_ns = std.time.nanoTimestamp();
 
-    while (seed <= max_seed and (!ranked and found < count or ranked)) : (seed +%= 1) {
+    var rng_state: u64 = @as(u64, @bitCast(std.time.milliTimestamp()));
+    const max_iterations = if (random_mode) (random_samples orelse std.math.maxInt(u64)) else max_seed - start_seed + 1;
+    var iteration: u64 = 0;
+
+    while (iteration < max_iterations and (!ranked and found < count or ranked)) : (iteration += 1) {
+        if (random_mode) {
+            seed = splitMix64(&rng_state);
+        } else {
+            seed = start_seed +% iteration;
+            if (seed > max_seed) break;
+        }
         @memset(evals, .{});
 
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
@@ -1096,9 +1128,15 @@ pub fn main() !void {
             const elapsed_ns = @as(u64, @intCast(std.time.nanoTimestamp() - start_ns));
             const elapsed_s = @as(f64, @floatFromInt(elapsed_ns)) / 1_000_000_000.0;
             const rate = @as(f64, @floatFromInt(tested)) / @max(0.001, elapsed_s);
-            const remaining = if (seed < max_seed) max_seed - seed else 0;
-            const eta_s = if (rate > 0) @as(f64, @floatFromInt(remaining)) / rate else 0;
-            try stdout.print("progress: tested={d} found={d} current_seed={d} rate={d:.0}/s eta={d:.0}s\n", .{ tested, found, seed, rate, eta_s });
+            if (random_mode) {
+                const remaining = if (random_samples) |rs| rs - tested else 0;
+                const eta_s = if (rate > 0 and random_samples != null) @as(f64, @floatFromInt(remaining)) / rate else 0;
+                try stdout.print("progress: tested={d} found={d} rate={d:.0}/s eta={d:.0}s [random]\n", .{ tested, found, rate, eta_s });
+            } else {
+                const remaining = if (seed < max_seed) max_seed - seed else 0;
+                const eta_s = if (rate > 0) @as(f64, @floatFromInt(remaining)) / rate else 0;
+                try stdout.print("progress: tested={d} found={d} current_seed={d} rate={d:.0}/s eta={d:.0}s\n", .{ tested, found, seed, rate, eta_s });
+            }
         }
 
         if (checkpoint_path) |path| {
@@ -1130,7 +1168,11 @@ pub fn main() !void {
         try writeCheckpoint(path, .{ .next_seed = seed, .tested = tested, .found = found });
     }
 
-    try stdout.print("summary: found={d} tested={d} start_seed={d} end_seed={d}\n", .{ found, tested, start_seed, if (seed == 0) 0 else seed - 1 });
+    if (random_mode) {
+        try stdout.print("summary: found={d} tested={d} mode=random\n", .{ found, tested });
+    } else {
+        try stdout.print("summary: found={d} tested={d} start_seed={d} end_seed={d}\n", .{ found, tested, start_seed, if (seed == 0) 0 else seed - 1 });
+    }
 }
 
 test "extract seed from java-style big-endian NBT" {
