@@ -105,7 +105,11 @@ pub fn getStructureConfig(structure: Structure, mc: i32) ?StructureConfig {
 }
 
 pub fn getStructurePos(structure: Structure, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?Pos {
+    return getStructurePosC(structure.toC(), mc, seed, reg_x, reg_z);
+}
+
+pub fn getStructurePosC(structure_c: c_int, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?Pos {
     var pos: c.Pos = undefined;
-    if (!c.getBedrockStructurePos(structure.toC(), mc, seed, reg_x, reg_z, &pos)) return null;
+    if (!c.getBedrockStructurePos(structure_c, mc, seed, reg_x, reg_z, &pos)) return null;
     return .{ .x = pos.x, .z = pos.z };
 }

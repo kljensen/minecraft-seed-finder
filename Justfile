@@ -7,9 +7,84 @@ CLAUDE_OAUTH := env_var_or_default("CLAUDE_CODE_CONTAINER_OAUTH_TOKEN", "")
 default:
     @just --list
 
+# Build for native platform
+build OPT="ReleaseFast":
+    zig build -Doptimize={{OPT}}
+
+# Build for macOS (native or cross-compile)
+build-mac OPT="ReleaseFast":
+    zig build -Dtarget=aarch64-macos -Doptimize={{OPT}}
+
+# Build for Linux (native or cross-compile)
+build-linux OPT="ReleaseFast":
+    zig build -Dtarget=aarch64-linux -Doptimize={{OPT}}
+
+# Build for both macOS and Linux
+build-all OPT="ReleaseFast":
+    just build-mac {{OPT}}
+    just build-linux {{OPT}}
+
+# Build and run all Zig tests
+test OPT="Debug":
+    zig build test --build-file build.zig -Doptimize={{OPT}}
+
+# Generate parity vectors with explicit knobs
+gen-parity \
+    OPT="ReleaseFast" \
+    SEEDS="64" \
+    BIOMES="128" \
+    RADIUS="2" \
+    SPAN="4096" \
+    SALT="0" \
+    THREADS="0" \
+    SIMD="0" \
+    PRETTY="1" \
+    OUT="tests/golden/parity_vectors.json":
+    PARITY_SEED_COUNT={{SEEDS}} \
+    PARITY_BIOME_SAMPLES={{BIOMES}} \
+    PARITY_REGION_RADIUS={{RADIUS}} \
+    PARITY_BIOME_SPAN={{SPAN}} \
+    PARITY_SEED_SALT={{SALT}} \
+    PARITY_THREADS={{THREADS}} \
+    PARITY_SIMD={{SIMD}} \
+    PARITY_PRETTY={{PRETTY}} \
+    PARITY_OUTPUT_PATH={{OUT}} \
+    zig build gen-parity-vectors --build-file build.zig -Doptimize={{OPT}}
+
+# Same as gen-parity, but enables per-version timing instrumentation
+gen-parity-timing \
+    OPT="ReleaseFast" \
+    SEEDS="64" \
+    BIOMES="128" \
+    RADIUS="2" \
+    SPAN="4096" \
+    SALT="0" \
+    THREADS="0" \
+    SIMD="0" \
+    OUT="/tmp/parity-timing.json":
+    PARITY_TIMING=1 \
+    PARITY_PRETTY=0 \
+    PARITY_SEED_COUNT={{SEEDS}} \
+    PARITY_BIOME_SAMPLES={{BIOMES}} \
+    PARITY_REGION_RADIUS={{RADIUS}} \
+    PARITY_BIOME_SPAN={{SPAN}} \
+    PARITY_SEED_SALT={{SALT}} \
+    PARITY_THREADS={{THREADS}} \
+    PARITY_SIMD={{SIMD}} \
+    PARITY_OUTPUT_PATH={{OUT}} \
+    zig build gen-parity-vectors --build-file build.zig -Doptimize={{OPT}}
+
 # Differential fuzzing against extracted C reference
 fuzz ROUNDS="8":
     scripts/diff_fuzz.sh {{ROUNDS}}
+
+# Fast differential fuzz sanity check
+fuzz-quick:
+    scripts/diff_fuzz.sh 3
+
+# Throughput benchmark across scalar/SIMD/parallel modes
+bench:
+    scripts/bench_parity.sh
 
 # Build the dev container
 dev-build:

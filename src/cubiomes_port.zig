@@ -1,3 +1,6 @@
+// Note: stderr is not available in pure Zig builds. Error logging is disabled.
+pub const stderr: ?*anyopaque = null;
+
 pub const __builtin_bswap16 = @import("std").zig.c_builtins.__builtin_bswap16;
 pub const __builtin_bswap32 = @import("std").zig.c_builtins.__builtin_bswap32;
 pub const __builtin_bswap64 = @import("std").zig.c_builtins.__builtin_bswap64;
@@ -2216,7 +2219,7 @@ pub const va_list = __gnuc_va_list;
 pub const fpos_t = __fpos_t;
 pub extern var stdin: [*c]FILE;
 pub extern var stdout: [*c]FILE;
-pub extern var stderr: [*c]FILE;
+// stderr is imported via @cImport at the top of the file
 pub extern fn remove(__filename: [*c]const u8) c_int;
 pub extern fn rename(__old: [*c]const u8, __new: [*c]const u8) c_int;
 pub extern fn renameat(__oldfd: c_int, __old: [*c]const u8, __newfd: c_int, __new: [*c]const u8) c_int;
@@ -60387,7 +60390,7 @@ pub export fn getStructurePos(arg_structureType: c_int, arg_mc: c_int, arg_seed:
                 return 1;
             },
             else => {
-                _ = fprintf(stderr, "ERR getStructurePos: unsupported structure type %d\n", structureType);
+                // _ = fprintf(stderr, "ERR getStructurePos: unsupported structure type %d\n", structureType);
                 exit(-@as(c_int, 1));
             },
         }
@@ -61408,7 +61411,7 @@ pub export fn isViableFeatureBiome(arg_mc: c_int, arg_structureType: c_int, arg_
                 return @intFromBool(biomeID == end_highlands);
             },
             else => {
-                _ = fprintf(stderr, "isViableFeatureBiome: not implemented for structure type %d.\n", structureType);
+                // _ = fprintf(stderr, "isViableFeatureBiome: not implemented for structure type %d.\n", structureType);
                 exit(@as(c_int, 1));
             },
         }
@@ -63107,7 +63110,7 @@ pub export fn setupBiomeFilter(arg_bf: [*c]BiomeFilter, arg_mc: c_int, arg_flags
                 if (tmp >= 0) break :blk excluded + @as(usize, @intCast(tmp)) else break :blk excluded - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
             }).*;
             if ((id & ~@as(c_int, 191)) != 0) {
-                _ = fprintf(stderr, "setupBiomeFilter: biomeID=%d not supported.\n", id);
+                // _ = fprintf(stderr, "setupBiomeFilter: biomeID=%d not supported.\n", id);
                 exit(-@as(c_int, 1));
             }
             if (id < @as(c_int, 128)) {
@@ -63218,7 +63221,7 @@ pub export fn setupBiomeFilter(arg_bf: [*c]BiomeFilter, arg_mc: c_int, arg_flags
                 if (tmp >= 0) break :blk required + @as(usize, @intCast(tmp)) else break :blk required - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
             }).*;
             if ((id & ~@as(c_int, 191)) != 0) {
-                _ = fprintf(stderr, "setupBiomeFilter: biomeID=%d not supported.\n", id);
+                // _ = fprintf(stderr, "setupBiomeFilter: biomeID=%d not supported.\n", id);
                 exit(-@as(c_int, 1));
             }
             while (true) {
@@ -67687,7 +67690,7 @@ pub fn isQuadBase(sconf: StructureConfig, arg_seed: u64, arg_radius: c_int) call
             @as(c_int, 8) => return isQuadBaseLarge(sconf, seed, @as(c_int, 58), @as(c_int, 23), @as(c_int, 58), radius),
             @as(c_int, 6), @as(c_int, 7), @as(c_int, 11) => return isQuadBaseFeature(sconf, seed, @as(c_int, 0), @as(c_int, 0), @as(c_int, 0), radius),
             else => {
-                _ = fprintf(stderr, "isQuadBase: not implemented for structure type %d\n", @as(c_int, @bitCast(@as(c_uint, sconf.structType))));
+                // _ = fprintf(stderr, "isQuadBase: not implemented for structure type %d\n", @as(c_int, @bitCast(@as(c_uint, sconf.structType))));
                 exit(-@as(c_int, 1));
             },
         }
@@ -69760,7 +69763,7 @@ pub export fn getBedrockStructurePos(arg_structureType: c_int, arg_mc: c_int, ar
                 return (@as(f64, @floatCast(mNextFloat(&mineshaftMt))) < 0.004) and (mNextInt(&mineshaftMt, @as(c_int, 80)) < (if (abs(regX) > abs(regZ)) abs(regX) else abs(regZ)));
             },
             else => {
-                _ = fprintf(stderr, "ERROR: getStructurePos: unsupported structure type %s\n", struct2str(structureType));
+                // _ = fprintf(stderr, "ERROR: getStructurePos: unsupported structure type %s\n", struct2str(structureType));
                 exit(@as(c_int, 1));
             },
         }
