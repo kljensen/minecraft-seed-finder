@@ -8,6 +8,7 @@ const BiomeReq = struct {
     label: []const u8,
     biome_id: i32,
     radius: i32,
+    min_count: i32,
 };
 
 const StructureReq = struct {
@@ -49,6 +50,7 @@ const EvalState = struct {
     computed: bool = false,
     matched: bool = false,
     best_dist2: i64 = std.math.maxInt(i64),
+    count: i32 = 0,
 };
 
 const ExprNode = union(enum) {
@@ -342,13 +344,26 @@ fn parseOutputFormat(v: []const u8) ?OutputFormat {
     return null;
 }
 
-fn parseNameRadius(spec: []const u8) ?struct { name: []const u8, radius: i32 } {
+fn parseNameRadius(spec: []const u8) ?struct { name: []const u8, radius: i32, min_count: i32 } {
     const sep = std.mem.indexOfScalar(u8, spec, ':') orelse return null;
     const name = std.mem.trim(u8, spec[0..sep], " ");
-    const radius_str = std.mem.trim(u8, spec[sep + 1 ..], " ");
+    const rest = spec[sep + 1 ..];
+
+    // Check for count@radius syntax (e.g., "5@500")
+    if (std.mem.indexOfScalar(u8, rest, '@')) |at_pos| {
+        const count_str = std.mem.trim(u8, rest[0..at_pos], " ");
+        const radius_str = std.mem.trim(u8, rest[at_pos + 1 ..], " ");
+        const min_count = std.fmt.parseInt(i32, count_str, 10) catch return null;
+        const radius = std.fmt.parseInt(i32, radius_str, 10) catch return null;
+        if (name.len == 0 or radius <= 0 or min_count <= 0) return null;
+        return .{ .name = name, .radius = radius, .min_count = min_count };
+    }
+
+    // Legacy syntax: just radius (e.g., "500")
+    const radius_str = std.mem.trim(u8, rest, " ");
     const radius = std.fmt.parseInt(i32, radius_str, 10) catch return null;
     if (name.len == 0 or radius <= 0) return null;
-    return .{ .name = name, .radius = radius };
+    return .{ .name = name, .radius = radius, .min_count = 1 };
 }
 
 fn parseAnchor(spec: []const u8) ?c.Pos {
@@ -494,10 +509,16 @@ fn floorDiv(a: i32, b: i32) i32 {
     return std.math.divFloor(i32, a, b) catch unreachable;
 }
 
-fn bestBiomeDistanceWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, radius: i32) ?i64 {
+const BiomeScanResult = struct {
+    best_dist2: i64,
+    count: i32,
+};
+
+fn scanBiomeWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, radius: i32) BiomeScanResult {
     const step: i32 = 4;
     const r2: i64 = @as(i64, radius) * radius;
     var best: i64 = std.math.maxInt(i64);
+    var count: i32 = 0;
 
     var dz: i32 = -radius;
     while (dz <= radius) : (dz += step) {
@@ -507,12 +528,18 @@ fn bestBiomeDistanceWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, 
             if (dist2 > r2) continue;
             const id = c.getBiomeAt(g, 1, center.x + dx, 0, center.z + dz);
             if (id != biome_id) continue;
+            count += 1;
             if (dist2 < best) best = dist2;
         }
     }
 
-    if (best == std.math.maxInt(i64)) return null;
-    return best;
+    return .{ .best_dist2 = best, .count = count };
+}
+
+fn bestBiomeDistanceWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, radius: i32) ?i64 {
+    const result = scanBiomeWithinRadius(g, center, biome_id, radius);
+    if (result.count == 0) return null;
+    return result.best_dist2;
 }
 
 fn bestStructureDistanceWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.Pos, req: StructureReq) ?i64 {
@@ -570,9 +597,11 @@ fn evalConstraintAt(
     const cst = constraints[idx];
     switch (cst) {
         .biome => |req| {
-            if (bestBiomeDistanceWithinRadius(g, anchor, req.biome_id, req.radius)) |best| {
+            const result = scanBiomeWithinRadius(g, anchor, req.biome_id, req.radius);
+            evals[idx].count = result.count;
+            if (result.count >= req.min_count) {
                 evals[idx].matched = true;
-                evals[idx].best_dist2 = best;
+                evals[idx].best_dist2 = result.best_dist2;
             }
         },
         .structure => |req| {
@@ -644,11 +673,17 @@ fn diagnosticsString(allocator: std.mem.Allocator, constraints: []const Constrai
         if (i != 0) try w.writeAll(";");
         try w.print("{s}=", .{cst.key()});
         if (!evals[i].matched) {
-            try w.writeAll("miss");
+            switch (cst) {
+                .biome => |req| try w.print("miss({d}/{d})", .{ evals[i].count, req.min_count }),
+                .structure => try w.writeAll("miss"),
+            }
             continue;
         }
         const dist = std.math.sqrt(@as(f64, @floatFromInt(evals[i].best_dist2)));
-        try w.print("ok@{d:.1}", .{dist});
+        switch (cst) {
+            .biome => try w.print("ok({d})@{d:.1}", .{ evals[i].count, dist }),
+            .structure => try w.print("ok@{d:.1}", .{dist}),
+        }
     }
 
     return out.toOwnedSlice();
@@ -795,8 +830,8 @@ fn printUsage(writer: anytype) !void {
             "  --count <N>                          Number of matches to output\n" ++
             "  --random                             Sample random seeds instead of linear scan\n" ++
             "  --random-samples <N>                 Test N random samples (requires --random)\n" ++
-            "  --require-biome <name:radius>        Repeatable biome filter (keys b1,b2,...)\n" ++
-            "  --require-structure <name:radius>    Repeatable structure filter (keys s1,s2,...)\n" ++
+            "  --require-biome <name:N@radius>      Biome with N+ chunks within radius (keys b1,b2,...)\n" ++
+            "  --require-structure <name:radius>    Structure within radius (keys s1,s2,...)\n" ++
             "  --where <expr>                       Boolean expression over bN/sN/cN\n" ++
             "  --anchor <x:z>                       Evaluate constraints around fixed location\n" ++
             "  --level-dat <path>                   Import seed from Java/Bedrock level.dat\n" ++
@@ -816,7 +851,10 @@ fn printUsage(writer: anytype) !void {
             "  --where \"c1 and c2 and (c3 or c4)\"\n\n" ++
             "Random sampling examples:\n" ++
             "  --random --random-samples 1000000    Test 1M random seeds\n" ++
-            "  --random --count 10                  Find 10 matches from random seeds\n",
+            "  --random --count 10                  Find 10 matches from random seeds\n\n" ++
+            "Biome count examples:\n" ++
+            "  --require-biome 'jagged_peaks:5@300' 5+ chunks of jagged peaks within 300\n" ++
+            "  --require-biome 'ocean:400'          At least 1 ocean chunk within 400 (default)\n",
         .{},
     );
 }
@@ -950,16 +988,20 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "--require-biome")) {
             const spec = args.next() orelse return error.InvalidArguments;
             const parsed = parseNameRadius(spec) orelse return error.InvalidArguments;
-            const biome_id = try biome_names.biomeIdFromName(allocator, parsed.name) orelse return error.UnknownBiome;
+            const biome_id = try biome_names.biomeIdFromName(allocator, parsed.name) orelse {
+                std.debug.print("error: unknown biome '{s}'\n", .{parsed.name});
+                return error.UnknownBiome;
+            };
 
             biome_idx += 1;
             const key = try std.fmt.allocPrint(allocator, "b{d}", .{biome_idx});
-            const label = try std.fmt.allocPrint(allocator, "biome:{s}:{d}", .{ parsed.name, parsed.radius });
+            const label = try std.fmt.allocPrint(allocator, "biome:{s}:{d}@{d}", .{ parsed.name, parsed.min_count, parsed.radius });
             try constraints.append(.{ .biome = .{
                 .key = key,
                 .label = label,
                 .biome_id = biome_id,
                 .radius = parsed.radius,
+                .min_count = parsed.min_count,
             } });
             try biome_constraint_ids.append(constraints.items.len - 1);
         } else if (std.mem.eql(u8, arg, "--require-structure")) {
