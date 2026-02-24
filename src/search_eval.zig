@@ -11,6 +11,8 @@ pub const EvalState = types.EvalState;
 pub const EvalMode = types.EvalMode;
 pub const BiomeOffset = types.BiomeOffset;
 pub const BiomePoint = types.BiomePoint;
+pub const ClimateRange = types.ClimateRange;
+pub const BiomeClimateBounds = types.BiomeClimateBounds;
 pub const StructureRegion = types.StructureRegion;
 pub const BiomeCompareReq = types.BiomeCompareReq;
 pub const NativeShadow = types.NativeShadow;
@@ -21,6 +23,146 @@ const BiomeScanResult = struct {
     best_dist2: i64,
     count: i32,
 };
+
+const BiomeTreeDef = struct {
+    params: []const [2]i32,
+    nodes: []const u64,
+    len: u32,
+};
+
+fn selectBiomeTree(mc: i32) BiomeTreeDef {
+    if (mc >= c.MC_1_21_WD) {
+        return .{ .params = &c.btree21wd_param, .nodes = &c.btree21wd_nodes, .len = c.btree21wd_nodes.len };
+    }
+    if (mc >= c.MC_1_20_6) {
+        return .{ .params = &c.btree20_param, .nodes = &c.btree20_nodes, .len = c.btree20_nodes.len };
+    }
+    if (mc >= c.MC_1_19_4) {
+        return .{ .params = &c.btree19_param, .nodes = &c.btree19_nodes, .len = c.btree19_nodes.len };
+    }
+    if (mc >= c.MC_1_19_2) {
+        return .{ .params = &c.btree192_param, .nodes = &c.btree192_nodes, .len = c.btree192_nodes.len };
+    }
+    return .{ .params = &c.btree18_param, .nodes = &c.btree18_nodes, .len = c.btree18_nodes.len };
+}
+
+pub fn precomputeBiomeClimateBounds(mc: i32, biome_id: i32) ?BiomeClimateBounds {
+    if (biome_id < 0 or biome_id > 255) return null;
+    const tree = selectBiomeTree(mc);
+    const biome_u8: u8 = @intCast(biome_id);
+
+    var out = BiomeClimateBounds{
+        .ranges = undefined,
+        .valid = false,
+    };
+
+    for (tree.nodes) |node| {
+        const node_biome: u8 = @truncate((node >> 48) & 0xff);
+        if (node_biome != biome_u8) continue;
+
+        if (!out.valid) {
+            for (0..6) |dim| {
+                const shift: u6 = @intCast(dim * 8);
+                const param_idx: usize = @intCast((node >> shift) & 0xff);
+                const p = tree.params[param_idx];
+                out.ranges[dim] = .{ .lo = p[0], .hi = p[1] };
+            }
+            out.valid = true;
+            continue;
+        }
+
+        for (0..6) |dim| {
+            const shift: u6 = @intCast(dim * 8);
+            const param_idx: usize = @intCast((node >> shift) & 0xff);
+            const p = tree.params[param_idx];
+            out.ranges[dim].lo = @min(out.ranges[dim].lo, p[0]);
+            out.ranges[dim].hi = @max(out.ranges[dim].hi, p[1]);
+        }
+    }
+    if (!out.valid) return null;
+    return out;
+}
+
+inline fn npBit(dim: usize) u6 {
+    return @as(u6, 1) << @as(std.math.Log2Int(u6), @intCast(dim));
+}
+
+fn isBiomeFeasible(bounds: BiomeClimateBounds, np_values: [6]i64, np_known: u6) bool {
+    if (!bounds.valid) return true;
+    for (0..6) |dim| {
+        const bit = npBit(dim);
+        if ((np_known & bit) == 0) continue;
+        const v = np_values[dim];
+        const lo = @as(i64, bounds.ranges[dim].lo);
+        const hi = @as(i64, bounds.ranges[dim].hi);
+        if (v < lo or v > hi) return false;
+    }
+    return true;
+}
+
+fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: BiomeClimateBounds) i32 {
+    const bn = &g.unnamed_0.unnamed_1.bn;
+    var np: [6]i64 = undefined;
+    var np_known: u6 = 0;
+
+    var sx: c_int = undefined;
+    var sy: c_int = undefined;
+    var sz: c_int = undefined;
+    c.voronoiAccess3D(g.sha, x, 0, z, &sx, &sy, &sz);
+
+    var px = @as(f64, @floatFromInt(sx));
+    var pz = @as(f64, @floatFromInt(sz));
+
+    px += c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_SHIFT))], @as(f64, @floatFromInt(sx)), 0.0, @as(f64, @floatFromInt(sz))) * 4.0;
+    pz += c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_SHIFT))], @as(f64, @floatFromInt(sz)), @as(f64, @floatFromInt(sx)), 0.0) * 4.0;
+
+    const c_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_CONTINENTALNESS))], px, 0.0, pz)));
+    np[@as(usize, @intCast(c.NP_CONTINENTALNESS))] = @as(i64, @intFromFloat(10000.0 * c_val));
+    np_known |= npBit(@as(usize, @intCast(c.NP_CONTINENTALNESS)));
+    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+
+    const e_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_EROSION))], px, 0.0, pz)));
+    np[@as(usize, @intCast(c.NP_EROSION))] = @as(i64, @intFromFloat(10000.0 * e_val));
+    np_known |= npBit(@as(usize, @intCast(c.NP_EROSION)));
+    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+
+    const w_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_WEIRDNESS))], px, 0.0, pz)));
+    np[@as(usize, @intCast(c.NP_WEIRDNESS))] = @as(i64, @intFromFloat(10000.0 * w_val));
+    np_known |= npBit(@as(usize, @intCast(c.NP_WEIRDNESS)));
+    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+
+    const np_param: [4]f32 = .{
+        c_val,
+        e_val,
+        -3.0 * (@abs(@abs(w_val) - 0.6666666865348816) - 0.3333333432674408),
+        w_val,
+    };
+    const off = @as(f64, @floatCast(c.getSpline(bn.sp, @constCast(@ptrCast(&np_param))) + 0.014999999664723873));
+    const d_val = @as(f32, @floatCast(((1.0 - (@as(f64, @floatFromInt(sy * 4)) / 128.0)) - (83.0 / 160.0)) + off));
+    np[@as(usize, @intCast(c.NP_DEPTH))] = @as(i64, @intFromFloat(10000.0 * d_val));
+    np_known |= npBit(@as(usize, @intCast(c.NP_DEPTH)));
+    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+
+    const t_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_TEMPERATURE))], px, 0.0, pz)));
+    np[@as(usize, @intCast(c.NP_TEMPERATURE))] = @as(i64, @intFromFloat(10000.0 * t_val));
+    np_known |= npBit(@as(usize, @intCast(c.NP_TEMPERATURE)));
+    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+
+    const h_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_HUMIDITY))], px, 0.0, pz)));
+    np[@as(usize, @intCast(c.NP_HUMIDITY))] = @as(i64, @intFromFloat(10000.0 * h_val));
+
+    return c.climateToBiome(bn.mc, @ptrCast(@alignCast(&np)), null);
+}
+
+fn maybeFastBiomeId(g: *c.Generator, x: i32, z: i32, climate_bounds: ?BiomeClimateBounds) ?i32 {
+    if (!biome_climate_early_exit_enabled) return null;
+    const bounds = climate_bounds orelse return null;
+    if (!bounds.valid) return null;
+    if (g.mc < c.MC_1_18) return null;
+    if (g.dim != c.DIM_OVERWORLD) return null;
+    if (g.unnamed_0.unnamed_1.bn.nptype != -1) return null;
+    return fastBiomeIdWithFeasibility(g, x, z, bounds);
+}
 
 const CachedBiomeSampler = struct {
     g: *c.Generator,
@@ -114,7 +256,8 @@ fn rowRunWidth(run: RowRun) i32 {
     return run.max_x - run.min_x + 1;
 }
 
-fn sampleBiomeScalar(g: *c.Generator, sampler_opt: *?CachedBiomeSampler, x: i32, z: i32) i32 {
+fn sampleBiomeScalar(g: *c.Generator, sampler_opt: *?CachedBiomeSampler, x: i32, z: i32, climate_bounds: ?BiomeClimateBounds) i32 {
+    if (maybeFastBiomeId(g, x, z, climate_bounds)) |id| return id;
     return if (sampler_opt.*) |*sampler|
         sampler.getBiomeAt(x, z)
     else
@@ -217,6 +360,7 @@ var active_eval_telemetry: ?*EvalTelemetry = null;
 var structure_bbox_prune_enabled = true;
 var conjunctive_cost_order_enabled = true;
 var structure_fast_pos_enabled = true;
+var biome_climate_early_exit_enabled = true;
 
 pub fn setEvalTelemetry(telemetry: ?*EvalTelemetry) void {
     active_eval_telemetry = telemetry;
@@ -235,6 +379,10 @@ pub fn setOptimizationToggles(structure_bbox_prune: bool, conjunctive_cost_order
 
 pub fn setStructureFastPosEnabled(enabled: bool) void {
     structure_fast_pos_enabled = enabled;
+}
+
+pub fn setBiomeClimateEarlyExitEnabled(enabled: bool) void {
+    biome_climate_early_exit_enabled = enabled;
 }
 
 inline fn getStructurePosForReq(req: StructureReq, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?bedrock.Pos {
@@ -541,12 +689,13 @@ pub fn buildBiomePointsForAnchor(allocator: std.mem.Allocator, center: c.Pos, of
     return out;
 }
 
-pub fn scanBiomeWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, offsets: []const BiomeOffset) BiomeScanResult {
+fn scanBiomeWithinRadiusWithBounds(g: *c.Generator, center: c.Pos, biome_id: i32, offsets: []const BiomeOffset, climate_bounds: ?BiomeClimateBounds) BiomeScanResult {
     var best: i64 = std.math.maxInt(i64);
     var count: i32 = 0;
-    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    const fast_enabled = maybeFastBiomeId(g, center.x, center.z, climate_bounds) != null;
+    var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
-    var row_sampler_opt = CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
+    var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
     defer if (row_sampler_opt) |*sampler| sampler.deinit();
 
     var i: usize = 0;
@@ -566,7 +715,7 @@ pub fn scanBiomeWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, offs
             const id = if (row_ready)
                 row_sampler_ptr.?.getBiomeAt(x - run.min_x)
             else
-                sampleBiomeScalar(g, &sampler_opt, x, run.z);
+                sampleBiomeScalar(g, &sampler_opt, x, run.z, climate_bounds);
             if (id != biome_id) continue;
             count += 1;
             if (off.dist2 < best) best = off.dist2;
@@ -577,12 +726,17 @@ pub fn scanBiomeWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, offs
     return .{ .best_dist2 = best, .count = count };
 }
 
-pub fn scanBiomePoints(g: *c.Generator, biome_id: i32, points: []const BiomePoint) BiomeScanResult {
+pub fn scanBiomeWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, offsets: []const BiomeOffset) BiomeScanResult {
+    return scanBiomeWithinRadiusWithBounds(g, center, biome_id, offsets, null);
+}
+
+fn scanBiomePointsWithBounds(g: *c.Generator, biome_id: i32, points: []const BiomePoint, climate_bounds: ?BiomeClimateBounds) BiomeScanResult {
     var best: i64 = std.math.maxInt(i64);
     var count: i32 = 0;
-    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    const fast_enabled = points.len > 0 and maybeFastBiomeId(g, points[0].x, points[0].z, climate_bounds) != null;
+    var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
-    var row_sampler_opt = CachedBiomeRowSampler.init(g, 1, 0, maxPointRunWidth(points));
+    var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxPointRunWidth(points));
     defer if (row_sampler_opt) |*sampler| sampler.deinit();
 
     var i: usize = 0;
@@ -601,7 +755,7 @@ pub fn scanBiomePoints(g: *c.Generator, biome_id: i32, points: []const BiomePoin
             const id = if (row_ready)
                 row_sampler_ptr.?.getBiomeAt(pt.x - run.min_x)
             else
-                sampleBiomeScalar(g, &sampler_opt, pt.x, pt.z);
+                sampleBiomeScalar(g, &sampler_opt, pt.x, pt.z, climate_bounds);
             if (id != biome_id) continue;
             count += 1;
             if (pt.dist2 < best) best = pt.dist2;
@@ -611,12 +765,17 @@ pub fn scanBiomePoints(g: *c.Generator, biome_id: i32, points: []const BiomePoin
     return .{ .best_dist2 = best, .count = count };
 }
 
-pub fn biomeMatchesWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, min_count: i32, offsets: []const BiomeOffset) bool {
+pub fn scanBiomePoints(g: *c.Generator, biome_id: i32, points: []const BiomePoint) BiomeScanResult {
+    return scanBiomePointsWithBounds(g, biome_id, points, null);
+}
+
+fn biomeMatchesWithinRadiusWithBounds(g: *c.Generator, center: c.Pos, biome_id: i32, min_count: i32, offsets: []const BiomeOffset, climate_bounds: ?BiomeClimateBounds) bool {
     if (min_count <= 0) return true;
     var count: i32 = 0;
-    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    const fast_enabled = maybeFastBiomeId(g, center.x, center.z, climate_bounds) != null;
+    var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
-    var row_sampler_opt = CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
+    var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
     defer if (row_sampler_opt) |*sampler| sampler.deinit();
 
     var i: usize = 0;
@@ -636,7 +795,7 @@ pub fn biomeMatchesWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, m
             const id = if (row_ready)
                 row_sampler_ptr.?.getBiomeAt(x - run.min_x)
             else
-                sampleBiomeScalar(g, &sampler_opt, x, run.z);
+                sampleBiomeScalar(g, &sampler_opt, x, run.z, climate_bounds);
             if (id == biome_id) {
                 count += 1;
                 if (count >= min_count) return true;
@@ -649,12 +808,17 @@ pub fn biomeMatchesWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, m
     return false;
 }
 
-pub fn biomeMatchesPoints(g: *c.Generator, biome_id: i32, min_count: i32, points: []const BiomePoint) bool {
+pub fn biomeMatchesWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, min_count: i32, offsets: []const BiomeOffset) bool {
+    return biomeMatchesWithinRadiusWithBounds(g, center, biome_id, min_count, offsets, null);
+}
+
+fn biomeMatchesPointsWithBounds(g: *c.Generator, biome_id: i32, min_count: i32, points: []const BiomePoint, climate_bounds: ?BiomeClimateBounds) bool {
     if (min_count <= 0) return true;
     var count: i32 = 0;
-    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    const fast_enabled = points.len > 0 and maybeFastBiomeId(g, points[0].x, points[0].z, climate_bounds) != null;
+    var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
-    var row_sampler_opt = CachedBiomeRowSampler.init(g, 1, 0, maxPointRunWidth(points));
+    var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxPointRunWidth(points));
     defer if (row_sampler_opt) |*sampler| sampler.deinit();
 
     var i: usize = 0;
@@ -673,7 +837,7 @@ pub fn biomeMatchesPoints(g: *c.Generator, biome_id: i32, min_count: i32, points
             const id = if (row_ready)
                 row_sampler_ptr.?.getBiomeAt(pt.x - run.min_x)
             else
-                sampleBiomeScalar(g, &sampler_opt, pt.x, pt.z);
+                sampleBiomeScalar(g, &sampler_opt, pt.x, pt.z, climate_bounds);
             if (id == biome_id) {
                 count += 1;
                 if (count >= min_count) return true;
@@ -684,6 +848,10 @@ pub fn biomeMatchesPoints(g: *c.Generator, biome_id: i32, min_count: i32, points
         i = run.end;
     }
     return false;
+}
+
+pub fn biomeMatchesPoints(g: *c.Generator, biome_id: i32, min_count: i32, points: []const BiomePoint) bool {
+    return biomeMatchesPointsWithBounds(g, biome_id, min_count, points, null);
 }
 
 pub fn bestBiomeDistanceWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, offsets: []const BiomeOffset) ?i64 {
@@ -857,18 +1025,18 @@ pub fn evalConstraintAt(
             const biome_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
             if (mode == .full) {
                 const result = if (req.points.len > 0)
-                    scanBiomePoints(g, req.biome_id, req.points)
+                    scanBiomePointsWithBounds(g, req.biome_id, req.points, req.climate_bounds)
                 else
-                    scanBiomeWithinRadius(g, anchor, req.biome_id, req.offsets);
+                    scanBiomeWithinRadiusWithBounds(g, anchor, req.biome_id, req.offsets, req.climate_bounds);
                 evals[idx].count = result.count;
                 evals[idx].matched = result.count >= req.min_count;
                 if (evals[idx].matched) evals[idx].best_dist2 = result.best_dist2;
                 evals[idx].finalized = true;
             } else {
                 const matched = if (req.points.len > 0)
-                    biomeMatchesPoints(g, req.biome_id, req.min_count, req.points)
+                    biomeMatchesPointsWithBounds(g, req.biome_id, req.min_count, req.points, req.climate_bounds)
                 else
-                    biomeMatchesWithinRadius(g, anchor, req.biome_id, req.min_count, req.offsets);
+                    biomeMatchesWithinRadiusWithBounds(g, anchor, req.biome_id, req.min_count, req.offsets, req.climate_bounds);
                 evals[idx].matched = matched;
                 evals[idx].count = if (matched) req.min_count else 0;
                 evals[idx].best_dist2 = std.math.maxInt(i64);

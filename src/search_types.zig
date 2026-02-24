@@ -14,6 +14,16 @@ pub const BiomePoint = struct {
     dist2: i64,
 };
 
+pub const ClimateRange = struct {
+    lo: i32,
+    hi: i32,
+};
+
+pub const BiomeClimateBounds = struct {
+    ranges: [6]ClimateRange,
+    valid: bool = false,
+};
+
 pub const StructureRegion = struct {
     reg_x: i32,
     reg_z: i32,
@@ -28,6 +38,7 @@ pub const BiomeReq = struct {
     radius2: i64,
     offsets: []BiomeOffset = &.{},
     points: []BiomePoint = &.{},
+    climate_bounds: ?BiomeClimateBounds = null,
 };
 
 pub const StructureReq = struct {

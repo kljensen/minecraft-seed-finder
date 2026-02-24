@@ -550,6 +550,7 @@ pub fn main() !void {
     while (idx < constraints.items.len) : (idx += 1) {
         switch (constraints.items[idx]) {
             .biome => |*req| {
+                req.climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, req.biome_id);
                 if (anchor_override) |anchor| {
                     req.points = try buildBiomePointsForAnchor(allocator, anchor, req.offsets);
                 }
@@ -647,8 +648,10 @@ pub fn main() !void {
     const structure_bbox_prune = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_STRUCTURE_BBOX_PRUNE");
     const conjunctive_cost_order = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_CONJUNCTIVE_COST_ORDER");
     const structure_fast_pos = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_STRUCTURE_FAST_POS");
+    const biome_climate_early_exit = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_BIOME_CLIMATE_EARLY_EXIT");
     search_eval.setOptimizationToggles(structure_bbox_prune, conjunctive_cost_order);
     search_eval.setStructureFastPosEnabled(structure_fast_pos);
+    search_eval.setBiomeClimateEarlyExitEnabled(biome_climate_early_exit);
     if (conjunctive_atoms) |atoms| {
         conjunctive_eval_atoms = try canonicalizeConjunctiveAtomPlan(allocator, atoms, aliases);
         if (conjunctive_eval_atoms) |eval_atoms| {
