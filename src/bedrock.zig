@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("c_bindings.zig");
+const c = @import("cubiomes_port.zig");
 
 pub const Pos = struct {
     x: i32,

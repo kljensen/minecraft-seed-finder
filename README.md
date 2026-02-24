@@ -33,6 +33,16 @@ scripts/diff_cli_stream.sh
 scripts/analyze_native_shadow.sh
 ```
 
+Acceptance gates:
+
+```sh
+# Release-path C-import guard
+scripts/release_c_path_guard.sh
+
+# Grep-friendly acceptance verdict (LGTM / PURE_ZIG / PARITY / PERF)
+scripts/acceptance.sh
+```
+
 ## Examples
 
 ```sh
