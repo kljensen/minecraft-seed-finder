@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+
+      - name: Zig build
+        run: zig build --build-file build.zig
+
+      - name: Zig test
+        run: zig build test --build-file build.zig
+
+      - name: CLI smoke test
+        run: zig build run --build-file build.zig -- --help

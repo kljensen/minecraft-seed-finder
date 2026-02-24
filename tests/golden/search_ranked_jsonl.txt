@@ -1,0 +1,7 @@
+{"seed":152,"spawn_x":-464,"spawn_z":160,"anchor_x":-464,"anchor_z":160,"score":3.9184156877825154e0,"matched_constraints":2,"total_constraints":2,"diagnostics":"b1=ok(1762)@0.0;s1=ok@40.8"}
+{"seed":490,"spawn_x":0,"spawn_z":0,"anchor_x":0,"anchor_z":0,"score":3.8868629150101524e0,"matched_constraints":2,"total_constraints":2,"diagnostics":"b1=ok(1642)@0.0;s1=ok@56.6"}
+{"seed":265,"spawn_x":-272,"spawn_z":352,"anchor_x":-272,"anchor_z":352,"score":3.823274223725004e0,"matched_constraints":2,"total_constraints":2,"diagnostics":"b1=ok(2308)@0.0;s1=ok@88.4"}
+{"seed":27,"spawn_x":-176,"spawn_z":272,"anchor_x":-176,"anchor_z":272,"score":3.817571931984138e0,"matched_constraints":2,"total_constraints":2,"diagnostics":"b1=ok(2989)@0.0;s1=ok@91.2"}
+{"seed":222,"spawn_x":192,"spawn_z":112,"anchor_x":192,"anchor_z":112,"score":3.791385523033515e0,"matched_constraints":2,"total_constraints":2,"diagnostics":"b1=ok(2638)@0.0;s1=ok@104.3"}
+{"seed":257,"spawn_x":-96,"spawn_z":-368,"anchor_x":-96,"anchor_z":-368,"score":3.74701778718653e0,"matched_constraints":2,"total_constraints":2,"diagnostics":"b1=ok(1224)@0.0;s1=ok@126.5"}
+summary: found=6 tested=501 start_seed=0 end_seed=499

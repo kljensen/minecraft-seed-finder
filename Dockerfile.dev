@@ -119,6 +119,22 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
+# ==============================================================================
+# AI TOOL CONFIGS (YOLO MODE)
+# ==============================================================================
+
+# Claude Code: auto-accept edits, skip permission prompts
+RUN mkdir -p /home/$USERNAME/.claude \
+    && echo '{"permissions":{"allow":[],"deny":[],"additionalDirectories":[],"defaultMode":"acceptEdits"},"skipDangerousModePermissionPrompt":true}' \
+    > /home/$USERNAME/.claude/settings.json \
+    && chown -R $USERNAME:$USERNAME /home/$USERNAME/.claude
+
+# Codex: full-auto with bypassed approvals and sandbox
+RUN mkdir -p /home/$USERNAME/.codex \
+    && printf 'approval-mode = "full-auto"\nsandbox-permissions = "full-auto"\n' \
+    > /home/$USERNAME/.codex/config.toml \
+    && chown -R $USERNAME:$USERNAME /home/$USERNAME/.codex
+
 WORKDIR /workspace
 USER $USERNAME
 CMD ["/bin/bash"]

@@ -3,6 +3,7 @@ set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 ROUNDS="${1:-8}"
+REF_REV="${PARITY_REF_REV:-HEAD~1}"
 
 rand_u32() {
     od -An -N4 -tu4 /dev/urandom | tr -d ' \n'
@@ -23,10 +24,11 @@ echo "Using output workspace:    $OUT_DIR"
 
 (
     cd "$ROOT_DIR"
-    git archive HEAD | tar -x -C "$REF_DIR"
+    git archive "$REF_REV" | tar -x -C "$REF_DIR"
 )
 
 cp "$ROOT_DIR/src/gen_parity_vectors.zig" "$REF_DIR/src/gen_parity_vectors.zig"
+cp "$ROOT_DIR/src/bedrock.zig" "$REF_DIR/src/bedrock.zig"
 
 cat > "$REF_DIR/src/c_bindings.zig" <<'EOF'
 pub const c = @cImport({
@@ -99,6 +101,7 @@ while [ "$round" -le "$ROUNDS" ]; do
     PARITY_REGION_RADIUS="$region_radius" \
     PARITY_BIOME_SPAN="$biome_span" \
     PARITY_SEED_SALT="$seed_salt" \
+    PARITY_PRETTY=0 \
     PARITY_OUTPUT_PATH="$ref_json" \
     zig build gen-parity-vectors --build-file "$REF_DIR/build.zig" >/dev/null
 
@@ -107,6 +110,7 @@ while [ "$round" -le "$ROUNDS" ]; do
     PARITY_REGION_RADIUS="$region_radius" \
     PARITY_BIOME_SPAN="$biome_span" \
     PARITY_SEED_SALT="$seed_salt" \
+    PARITY_PRETTY=0 \
     PARITY_OUTPUT_PATH="$zig_json" \
     zig build gen-parity-vectors --build-file "$ROOT_DIR/build.zig" >/dev/null
 

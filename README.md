@@ -14,6 +14,25 @@ zig build
 zig build test
 ```
 
+Opt-in performance tests and benchmarking:
+
+```sh
+# Runs perf tests + benchmark recording (writes to ./tmp/perf)
+SEED_FINDER_PERF_TEST=1 zig build perf-test
+
+# Or just run benchmark recorder directly
+scripts/bench_parity.sh
+
+# Native noise perf bench (writes ./tmp/perf/native_noise_history.jsonl)
+zig build perf-native-noise
+
+# Strict C-reference differential harness (vectors + full CLI streams)
+scripts/diff_cli_stream.sh
+
+# Analyze accumulated shadow diagnostics
+scripts/analyze_native_shadow.sh
+```
+
 ## Examples
 
 ```sh
@@ -85,6 +104,9 @@ seed-finder --count <N> [options]
 --checkpoint-every <N>
 --resume
 --output <path>
+--experimental-native-shadow      # run native Zig noise backend in shadow mode (no filtering impact)
+--experimental-native-shadow-max-mismatch-rate <f64>
+                                  # optional gate; fail run if native biome proxy mismatch exceeds threshold
 ```
 
 Expression grammar:

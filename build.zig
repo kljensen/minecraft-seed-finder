@@ -1,10 +1,5 @@
 const std = @import("std");
 
-fn linkRuntime(step: *std.Build.Step.Compile) void {
-    step.linkLibC();
-    step.linkSystemLibrary("m");
-}
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -15,7 +10,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    linkRuntime(exe);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -30,7 +24,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    linkRuntime(gen_vectors);
     const run_gen_vectors = b.addRunArtifact(gen_vectors);
     const gen_step = b.step("gen-parity-vectors", "Generate parity golden vectors");
     gen_step.dependOn(&run_gen_vectors.step);
@@ -40,9 +33,16 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    linkRuntime(unit_tests);
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_unit_tests.step);
+
+    const perf_cmd = b.addSystemCommand(&.{ "sh", "scripts/perf_test.sh" });
+    const perf_step = b.step("perf-test", "Run opt-in performance tests");
+    perf_step.dependOn(&perf_cmd.step);
+
+    const native_noise_perf_cmd = b.addSystemCommand(&.{ "sh", "scripts/bench_native_noise.sh" });
+    const native_noise_perf_step = b.step("perf-native-noise", "Run native noise benchmark");
+    native_noise_perf_step.dependOn(&native_noise_perf_cmd.step);
 }
