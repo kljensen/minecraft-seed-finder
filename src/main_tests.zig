@@ -38,6 +38,7 @@ const evalExpr = app.evalExpr;
 const evalConjunctiveAtoms = app.evalConjunctiveAtoms;
 const evaluateAll = app.evaluateAll;
 const buildConstraintAliases = app.buildConstraintAliases;
+const reorderConjunctiveAtomsByEstimatedCost = app.reorderConjunctiveAtomsByEstimatedCost;
 const summarize = app.summarize;
 const diagnosticsString = app.diagnosticsString;
 const emitResult = app.emitResult;
@@ -377,6 +378,46 @@ test "canonical conjunctive plan deduplicates aliased atoms without changing dec
         const planned = evalConjunctiveAtoms(canonical_plan, constraints.items, aliases, evals_plan, 1, &gen, seed, mc, anchor);
         try std.testing.expectEqual(recursive, planned);
     }
+}
+
+test "conjunctive plan cost ordering places cheaper structure checks first" {
+    const allocator = std.testing.allocator;
+    const mc = c.MC_1_21_1;
+
+    var constraints = std.ArrayList(Constraint).init(allocator);
+    defer {
+        freeConstraints(allocator, constraints.items);
+        constraints.deinit();
+    }
+
+    const biome_id = try biome_names.biomeIdFromName(allocator, "plains") orelse unreachable;
+    try constraints.append(.{ .biome = .{
+        .key = try allocator.dupe(u8, "b1"),
+        .label = try allocator.dupe(u8, "biome:plains:16@512"),
+        .biome_id = biome_id,
+        .radius = 512,
+        .min_count = 16,
+        .radius2 = @as(i64, 512) * 512,
+        .offsets = try buildBiomeOffsets(allocator, 512),
+        .points = &.{},
+    } });
+
+    const st = try bedrock.parseStructure(allocator, "village") orelse unreachable;
+    try constraints.append(.{ .structure = .{
+        .key = try allocator.dupe(u8, "s1"),
+        .label = try allocator.dupe(u8, "structure:village:500"),
+        .structure = st,
+        .radius = 500,
+        .radius2 = @as(i64, 500) * 500,
+        .structure_c = st.toC(),
+        .cfg = bedrock.getStructureConfig(st, mc),
+        .regions = &.{},
+    } });
+
+    var atom_plan = [_]usize{ 0, 1 };
+    reorderConjunctiveAtomsByEstimatedCost(&atom_plan, constraints.items);
+    try std.testing.expectEqual(@as(usize, 1), atom_plan[0]);
+    try std.testing.expectEqual(@as(usize, 0), atom_plan[1]);
 }
 
 test "native biome proxy count matches biome scan count on seeded generator" {

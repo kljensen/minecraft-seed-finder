@@ -197,6 +197,87 @@ fn floorDiv(a: i32, b: i32) i32 {
     return std.math.divFloor(i32, a, b) catch unreachable;
 }
 
+pub const EvalTelemetry = struct {
+    seeds_tested: u64 = 0,
+    eval_total_ns: u128 = 0,
+    biome_eval_ns: u128 = 0,
+    structure_eval_ns: u128 = 0,
+    biome_constraint_evals: u64 = 0,
+    structure_constraint_evals: u64 = 0,
+    structure_region_candidates: u64 = 0,
+    structure_region_bbox_rejects: u64 = 0,
+    structure_get_pos_calls: u64 = 0,
+    structure_within_radius: u64 = 0,
+    structure_viable_pos_checks: u64 = 0,
+    structure_viable_terrain_checks: u64 = 0,
+    structure_matches: u64 = 0,
+};
+
+var active_eval_telemetry: ?*EvalTelemetry = null;
+var structure_bbox_prune_enabled = true;
+var conjunctive_cost_order_enabled = true;
+
+pub fn setEvalTelemetry(telemetry: ?*EvalTelemetry) void {
+    active_eval_telemetry = telemetry;
+}
+
+pub fn noteEvalSeedTested() void {
+    if (active_eval_telemetry) |telemetry| {
+        telemetry.seeds_tested +%= 1;
+    }
+}
+
+pub fn setOptimizationToggles(structure_bbox_prune: bool, conjunctive_cost_order: bool) void {
+    structure_bbox_prune_enabled = structure_bbox_prune;
+    conjunctive_cost_order_enabled = conjunctive_cost_order;
+}
+
+fn chunkRange(cfg: bedrock.StructureConfig) i32 {
+    return cfg.spacing - cfg.separation;
+}
+
+fn axisDistanceToInterval(point: i64, lo: i64, hi: i64) i64 {
+    if (point < lo) return lo - point;
+    if (point > hi) return point - hi;
+    return 0;
+}
+
+fn regionMayIntersectRadius(center: c.Pos, cfg: bedrock.StructureConfig, reg_x: i32, reg_z: i32, radius2: i64) bool {
+    const range = chunkRange(cfg);
+    if (range <= 0) return false;
+
+    const spacing_i64 = @as(i64, cfg.spacing);
+    const reg_x_base = @as(i64, reg_x) * spacing_i64;
+    const reg_z_base = @as(i64, reg_z) * spacing_i64;
+
+    const min_x = (reg_x_base << 4) + 8;
+    const min_z = (reg_z_base << 4) + 8;
+    const max_x = ((reg_x_base + @as(i64, range - 1)) << 4) + 8;
+    const max_z = ((reg_z_base + @as(i64, range - 1)) << 4) + 8;
+
+    const dx = axisDistanceToInterval(@as(i64, center.x), min_x, max_x);
+    const dz = axisDistanceToInterval(@as(i64, center.z), min_z, max_z);
+    return (dx * dx) + (dz * dz) <= radius2;
+}
+
+fn regionMinDistance2ToCenter(center: c.Pos, cfg: bedrock.StructureConfig, reg: StructureRegion) i64 {
+    const range = chunkRange(cfg);
+    if (range <= 0) return std.math.maxInt(i64);
+
+    const spacing_i64 = @as(i64, cfg.spacing);
+    const reg_x_base = @as(i64, reg.reg_x) * spacing_i64;
+    const reg_z_base = @as(i64, reg.reg_z) * spacing_i64;
+
+    const min_x = (reg_x_base << 4) + 8;
+    const min_z = (reg_z_base << 4) + 8;
+    const max_x = ((reg_x_base + @as(i64, range - 1)) << 4) + 8;
+    const max_z = ((reg_z_base + @as(i64, range - 1)) << 4) + 8;
+
+    const dx = axisDistanceToInterval(@as(i64, center.x), min_x, max_x);
+    const dz = axisDistanceToInterval(@as(i64, center.z), min_z, max_z);
+    return (dx * dx) + (dz * dz);
+}
+
 pub fn nativeBiomeProxyCount(req: BiomeReq, g: *c.Generator, anchor: c.Pos, needed: i32) i32 {
     if (needed <= 0) return 0;
     var count: i32 = 0;
@@ -395,8 +476,25 @@ pub fn buildStructureRegionsForAnchor(
     while (reg_z <= max_reg_z) : (reg_z += 1) {
         var reg_x = min_reg_x;
         while (reg_x <= max_reg_x) : (reg_x += 1) {
+            if (structure_bbox_prune_enabled and !regionMayIntersectRadius(center, cfg, reg_x, reg_z, req.radius2)) continue;
             try out.append(.{ .reg_x = reg_x, .reg_z = reg_z });
         }
+    }
+
+    if (out.items.len > 1) {
+        const SortCtx = struct { center: c.Pos, cfg: bedrock.StructureConfig };
+        const sort_ctx = SortCtx{ .center = center, .cfg = cfg };
+        std.sort.heap(StructureRegion, out.items, sort_ctx, struct {
+            fn lessThan(ctx: SortCtx, a: StructureRegion, b: StructureRegion) bool {
+                const da = regionMinDistance2ToCenter(ctx.center, ctx.cfg, a);
+                const db = regionMinDistance2ToCenter(ctx.center, ctx.cfg, b);
+                if (da == db) {
+                    if (a.reg_z == b.reg_z) return a.reg_x < b.reg_x;
+                    return a.reg_z < b.reg_z;
+                }
+                return da < db;
+            }
+        }.lessThan);
     }
     return out.toOwnedSlice();
 }
@@ -585,16 +683,31 @@ pub fn bestBiomeDistanceWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i
 pub fn bestStructureDistanceWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.Pos, req: StructureReq) ?i64 {
     const r2 = req.radius2;
     var best: i64 = std.math.maxInt(i64);
+    const telemetry = active_eval_telemetry;
 
     if (req.regions.len != 0) {
         for (req.regions) |reg| {
+            if (telemetry) |t| t.structure_region_candidates +%= 1;
+            if (structure_bbox_prune_enabled) {
+                if (req.cfg) |cfg| {
+                    if (!regionMayIntersectRadius(center, cfg, reg.reg_x, reg.reg_z, r2)) {
+                        if (telemetry) |t| t.structure_region_bbox_rejects +%= 1;
+                        continue;
+                    }
+                }
+            }
+            if (telemetry) |t| t.structure_get_pos_calls +%= 1;
             const pos = bedrock.getStructurePosC(req.structure_c, mc, seed, reg.reg_x, reg.reg_z) orelse continue;
             const dx = pos.x - center.x;
             const dz = pos.z - center.z;
             const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
             if (dist2 > r2) continue;
+            if (telemetry) |t| t.structure_within_radius +%= 1;
+            if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
             if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) continue;
+            if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
             if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) continue;
+            if (telemetry) |t| t.structure_matches +%= 1;
             if (dist2 < best) best = dist2;
         }
     } else {
@@ -615,13 +728,23 @@ pub fn bestStructureDistanceWithinRadius(g: *c.Generator, seed: u64, mc: i32, ce
         while (reg_z <= max_reg_z) : (reg_z += 1) {
             var reg_x = min_reg_x;
             while (reg_x <= max_reg_x) : (reg_x += 1) {
+                if (telemetry) |t| t.structure_region_candidates +%= 1;
+                if (structure_bbox_prune_enabled and !regionMayIntersectRadius(center, cfg, reg_x, reg_z, r2)) {
+                    if (telemetry) |t| t.structure_region_bbox_rejects +%= 1;
+                    continue;
+                }
+                if (telemetry) |t| t.structure_get_pos_calls +%= 1;
                 const pos = bedrock.getStructurePosC(req.structure_c, mc, seed, reg_x, reg_z) orelse continue;
                 const dx = pos.x - center.x;
                 const dz = pos.z - center.z;
                 const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
                 if (dist2 > r2) continue;
+                if (telemetry) |t| t.structure_within_radius +%= 1;
+                if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
                 if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) continue;
+                if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
                 if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) continue;
+                if (telemetry) |t| t.structure_matches +%= 1;
                 if (dist2 < best) best = dist2;
             }
         }
@@ -633,16 +756,33 @@ pub fn bestStructureDistanceWithinRadius(g: *c.Generator, seed: u64, mc: i32, ce
 
 pub fn anyStructureWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.Pos, req: StructureReq) bool {
     const r2 = req.radius2;
+    const telemetry = active_eval_telemetry;
 
     if (req.regions.len != 0) {
         for (req.regions) |reg| {
+            if (telemetry) |t| t.structure_region_candidates +%= 1;
+            if (structure_bbox_prune_enabled) {
+                if (req.cfg) |cfg| {
+                    if (!regionMayIntersectRadius(center, cfg, reg.reg_x, reg.reg_z, r2)) {
+                        if (telemetry) |t| t.structure_region_bbox_rejects +%= 1;
+                        continue;
+                    }
+                }
+            }
+            if (telemetry) |t| t.structure_get_pos_calls +%= 1;
             const pos = bedrock.getStructurePosC(req.structure_c, mc, seed, reg.reg_x, reg.reg_z) orelse continue;
             const dx = pos.x - center.x;
             const dz = pos.z - center.z;
             const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
             if (dist2 > r2) continue;
+            if (telemetry) |t| t.structure_within_radius +%= 1;
+            if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
             if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) continue;
+            if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
             if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) continue;
+            if (telemetry) |t| {
+                t.structure_matches +%= 1;
+            }
             return true;
         }
         return false;
@@ -665,13 +805,25 @@ pub fn anyStructureWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.P
     while (reg_z <= max_reg_z) : (reg_z += 1) {
         var reg_x = min_reg_x;
         while (reg_x <= max_reg_x) : (reg_x += 1) {
+            if (telemetry) |t| t.structure_region_candidates +%= 1;
+            if (structure_bbox_prune_enabled and !regionMayIntersectRadius(center, cfg, reg_x, reg_z, r2)) {
+                if (telemetry) |t| t.structure_region_bbox_rejects +%= 1;
+                continue;
+            }
+            if (telemetry) |t| t.structure_get_pos_calls +%= 1;
             const pos = bedrock.getStructurePosC(req.structure_c, mc, seed, reg_x, reg_z) orelse continue;
             const dx = pos.x - center.x;
             const dz = pos.z - center.z;
             const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
             if (dist2 > r2) continue;
+            if (telemetry) |t| t.structure_within_radius +%= 1;
+            if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
             if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) continue;
+            if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
             if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) continue;
+            if (telemetry) |t| {
+                t.structure_matches +%= 1;
+            }
             return true;
         }
     }
@@ -701,10 +853,12 @@ pub fn evalConstraintAt(
     }
     if (evals[idx].computed and (mode == .threshold or evals[idx].finalized)) return evals[idx].matched;
     evals[idx].computed = true;
+    const total_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
 
     const cst = constraints[idx];
     switch (cst) {
         .biome => |req| {
+            const biome_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
             if (mode == .full) {
                 const result = if (req.points.len > 0)
                     scanBiomePoints(g, req.biome_id, req.points)
@@ -724,8 +878,13 @@ pub fn evalConstraintAt(
                 evals[idx].best_dist2 = std.math.maxInt(i64);
                 evals[idx].finalized = false;
             }
+            if (active_eval_telemetry) |telemetry| {
+                telemetry.biome_constraint_evals +%= 1;
+                telemetry.biome_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - biome_start));
+            }
         },
         .structure => |req| {
+            const structure_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
             if (mode == .full) {
                 evals[idx].matched = false;
                 evals[idx].count = 0;
@@ -740,7 +899,14 @@ pub fn evalConstraintAt(
                 evals[idx].best_dist2 = std.math.maxInt(i64);
                 evals[idx].finalized = false;
             }
+            if (active_eval_telemetry) |telemetry| {
+                telemetry.structure_constraint_evals +%= 1;
+                telemetry.structure_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - structure_start));
+            }
         },
+    }
+    if (active_eval_telemetry) |telemetry| {
+        telemetry.eval_total_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - total_start));
     }
 
     return evals[idx].matched;
@@ -782,6 +948,39 @@ pub fn evalConjunctiveAtoms(
         if (!evalConstraintAt(constraints, aliases, idx, evals, eval_epoch, g, seed, mc, anchor, .threshold)) return false;
     }
     return true;
+}
+
+fn estimateConstraintEvalCost(cst: Constraint) u64 {
+    return switch (cst) {
+        .biome => |req| blk: {
+            const n = if (req.points.len > 0) req.points.len else req.offsets.len;
+            break :blk @as(u64, @intCast(@max(@as(usize, 1), n)));
+        },
+        .structure => |req| blk: {
+            if (req.regions.len != 0) break :blk @as(u64, @intCast(@max(@as(usize, 1), req.regions.len)));
+            if (req.cfg) |cfg| {
+                const step = @as(i64, cfg.spacing) * 16;
+                if (step <= 0) break :blk 64;
+                const span = (@as(i64, req.radius) * 2) + (@as(i64, chunkRange(cfg)) * 16);
+                const axis = @divTrunc(span + step - 1, step) + 2;
+                const est = @max(@as(i64, 1), axis * axis);
+                break :blk @as(u64, @intCast(est));
+            }
+            break :blk 128;
+        },
+    };
+}
+
+pub fn reorderConjunctiveAtomsByEstimatedCost(atom_indices: []usize, constraints: []const Constraint) void {
+    if (!conjunctive_cost_order_enabled) return;
+    std.sort.heap(usize, atom_indices, constraints, struct {
+        fn lessThan(ctx: []const Constraint, a: usize, b: usize) bool {
+            const ca = estimateConstraintEvalCost(ctx[a]);
+            const cb = estimateConstraintEvalCost(ctx[b]);
+            if (ca == cb) return a < b;
+            return ca < cb;
+        }
+    }.lessThan);
 }
 
 pub fn evaluateAll(

@@ -25,6 +25,7 @@ pub const BiomeOffset = types.BiomeOffset;
 pub const BiomePoint = types.BiomePoint;
 pub const StructureRegion = types.StructureRegion;
 pub const BiomeCompareReq = types.BiomeCompareReq;
+pub const EvalTelemetry = search_eval.EvalTelemetry;
 pub const buildConjunctiveAtomPlan = expr.buildConjunctiveAtomPlan;
 pub const canonicalizeConjunctiveAtomPlan = expr.canonicalizeConjunctiveAtomPlan;
 pub const nativeBiomeProxyCount = search_eval.nativeBiomeProxyCount;
@@ -47,6 +48,7 @@ pub const evaluateAll = search_eval.evaluateAll;
 pub const buildConstraintAliases = search_eval.buildConstraintAliases;
 pub const summarize = search_eval.summarize;
 pub const diagnosticsString = search_eval.diagnosticsString;
+pub const reorderConjunctiveAtomsByEstimatedCost = search_eval.reorderConjunctiveAtomsByEstimatedCost;
 pub const emitResult = output.emitResult;
 pub const betterCandidate = output.betterCandidate;
 pub const keepTopK = output.keepTopK;
@@ -234,6 +236,56 @@ fn appendPerfBreakdownRecord(
     try file.writer().writeByte('\n');
 }
 
+fn appendEvalTelemetryRecord(
+    label: []const u8,
+    tested: u64,
+    found: usize,
+    telemetry: EvalTelemetry,
+) !void {
+    try std.fs.cwd().makePath("tmp/perf");
+    var file = std.fs.cwd().openFile("tmp/perf/structure_eval_profile.jsonl", .{ .mode = .read_write }) catch try std.fs.cwd().createFile("tmp/perf/structure_eval_profile.jsonl", .{});
+    defer file.close();
+    try file.seekFromEnd(0);
+
+    const Rec = struct {
+        label: []const u8,
+        tested: u64,
+        found: usize,
+        seeds_tested: u64,
+        eval_total_ns: u128,
+        biome_eval_ns: u128,
+        structure_eval_ns: u128,
+        biome_constraint_evals: u64,
+        structure_constraint_evals: u64,
+        structure_region_candidates: u64,
+        structure_region_bbox_rejects: u64,
+        structure_get_pos_calls: u64,
+        structure_within_radius: u64,
+        structure_viable_pos_checks: u64,
+        structure_viable_terrain_checks: u64,
+        structure_matches: u64,
+    };
+    try std.json.stringify(Rec{
+        .label = label,
+        .tested = tested,
+        .found = found,
+        .seeds_tested = telemetry.seeds_tested,
+        .eval_total_ns = telemetry.eval_total_ns,
+        .biome_eval_ns = telemetry.biome_eval_ns,
+        .structure_eval_ns = telemetry.structure_eval_ns,
+        .biome_constraint_evals = telemetry.biome_constraint_evals,
+        .structure_constraint_evals = telemetry.structure_constraint_evals,
+        .structure_region_candidates = telemetry.structure_region_candidates,
+        .structure_region_bbox_rejects = telemetry.structure_region_bbox_rejects,
+        .structure_get_pos_calls = telemetry.structure_get_pos_calls,
+        .structure_within_radius = telemetry.structure_within_radius,
+        .structure_viable_pos_checks = telemetry.structure_viable_pos_checks,
+        .structure_viable_terrain_checks = telemetry.structure_viable_terrain_checks,
+        .structure_matches = telemetry.structure_matches,
+    }, .{ .whitespace = .minified }, file.writer());
+    try file.writer().writeByte('\n');
+}
+
 fn printUsage(writer: anytype) !void {
     try writer.print(
         "Usage:\n" ++
@@ -258,6 +310,7 @@ fn printUsage(writer: anytype) !void {
             "  --checkpoint-every <N>               Write checkpoint every N tested seeds\n" ++
             "  --resume                             Resume from checkpoint state\n" ++
             "  --perf-breakdown <label>             Record/apply per-stage hot-loop timings into tmp/perf\n" ++
+            "  --perf-eval-detail <label>           Record detailed biome/structure eval telemetry into tmp/perf\n" ++
             "  --list-biomes                        List accepted biome names\n" ++
             "  --list-structures                    List accepted structure names\n" ++
             "  --output <path>                      Optional output file\n" ++
@@ -358,6 +411,7 @@ pub fn main() !void {
     var native_shadow_max_mismatch_rate: ?f64 = null;
     var native_backend = NativeBackend{};
     var perf_breakdown_label: ?[]const u8 = null;
+    var perf_eval_detail_label: ?[]const u8 = null;
 
     var biome_idx: usize = 0;
     var structure_idx: usize = 0;
@@ -412,6 +466,8 @@ pub fn main() !void {
             do_resume = true;
         } else if (std.mem.eql(u8, arg, "--perf-breakdown")) {
             perf_breakdown_label = args.next() orelse return error.InvalidArguments;
+        } else if (std.mem.eql(u8, arg, "--perf-eval-detail")) {
+            perf_eval_detail_label = args.next() orelse return error.InvalidArguments;
         } else if (std.mem.eql(u8, arg, "--random")) {
             random_mode = true;
         } else if (std.mem.eql(u8, arg, "--random-samples")) {
@@ -584,8 +640,14 @@ pub fn main() !void {
     defer allocator.free(evals);
     const aliases = try buildConstraintAliases(allocator, constraints.items);
     defer allocator.free(aliases);
+    const structure_bbox_prune = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_STRUCTURE_BBOX_PRUNE");
+    const conjunctive_cost_order = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_CONJUNCTIVE_COST_ORDER");
+    search_eval.setOptimizationToggles(structure_bbox_prune, conjunctive_cost_order);
     if (conjunctive_atoms) |atoms| {
         conjunctive_eval_atoms = try canonicalizeConjunctiveAtomPlan(allocator, atoms, aliases);
+        if (conjunctive_eval_atoms) |eval_atoms| {
+            reorderConjunctiveAtomsByEstimatedCost(eval_atoms, constraints.items);
+        }
     }
 
     const start_ns = std.time.nanoTimestamp();
@@ -599,6 +661,11 @@ pub fn main() !void {
     const lazy_spawn = fixed_anchor and !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_LAZY_SPAWN");
     const perf_enabled = perf_breakdown_label != null;
     var perf_breakdown = PerfBreakdown{};
+    var eval_telemetry = EvalTelemetry{};
+    if (perf_eval_detail_label != null) {
+        search_eval.setEvalTelemetry(&eval_telemetry);
+    }
+    defer search_eval.setEvalTelemetry(null);
     var biome_compare_reqs: []BiomeCompareReq = &.{};
     defer if (biome_compare_reqs.len != 0) allocator.free(biome_compare_reqs);
     if (native_compare_active) {
@@ -686,6 +753,7 @@ pub fn main() !void {
         }
 
         tested +%= 1;
+        search_eval.noteEvalSeedTested();
 
         if (matches_expr) {
             if (lazy_spawn and spawn == null) {
@@ -789,6 +857,30 @@ pub fn main() !void {
             );
         }
         try appendPerfBreakdownRecord(label, tested, found, perf_breakdown);
+    }
+    if (perf_eval_detail_label) |label| {
+        if (eval_telemetry.eval_total_ns > 0 and eval_telemetry.seeds_tested > 0) {
+            const total_eval = @as(f64, @floatFromInt(eval_telemetry.eval_total_ns));
+            const structure_eval = @as(f64, @floatFromInt(eval_telemetry.structure_eval_ns));
+            const biome_eval = @as(f64, @floatFromInt(eval_telemetry.biome_eval_ns));
+            const other_eval = @max(0.0, total_eval - structure_eval - biome_eval);
+            const seeds_f = @as(f64, @floatFromInt(eval_telemetry.seeds_tested));
+            const regions_per_seed = @as(f64, @floatFromInt(eval_telemetry.structure_region_candidates)) / seeds_f;
+            const getpos_per_seed = @as(f64, @floatFromInt(eval_telemetry.structure_get_pos_calls)) / seeds_f;
+            try stdout.print(
+                "perf-eval-detail[{s}]: seeds={d} structure={d:.2}% biome={d:.2}% other_eval={d:.2}% region_checks/seed={d:.2} get_pos/seed={d:.2}\n",
+                .{
+                    label,
+                    eval_telemetry.seeds_tested,
+                    structure_eval * 100.0 / total_eval,
+                    biome_eval * 100.0 / total_eval,
+                    other_eval * 100.0 / total_eval,
+                    regions_per_seed,
+                    getpos_per_seed,
+                },
+            );
+        }
+        try appendEvalTelemetryRecord(label, tested, found, eval_telemetry);
     }
     if (native_shadow.enabled) {
         const mean_abs_diff = if (native_shadow.compared == 0) 0.0 else native_shadow.abs_diff_sum / @as(f64, @floatFromInt(native_shadow.compared));
