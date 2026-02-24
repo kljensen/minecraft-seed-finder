@@ -240,6 +240,7 @@ pub fn nativeCompareNeeded(req: BiomeReq, cmp_req: BiomeCompareReq, strict: bool
 pub fn evalBiomeThresholdAndProxy(
     req: BiomeReq,
     eval: *EvalState,
+    eval_epoch: u64,
     g: *c.Generator,
     anchor: c.Pos,
     needed: i32,
@@ -290,11 +291,14 @@ pub fn evalBiomeThresholdAndProxy(
         }
     }
 
-    eval.computed = true;
-    eval.finalized = false;
-    eval.matched = c_pass;
-    eval.count = if (c_pass) req.min_count else 0;
-    eval.best_dist2 = std.math.maxInt(i64);
+    eval.* = .{
+        .epoch = eval_epoch,
+        .computed = true,
+        .finalized = false,
+        .matched = c_pass,
+        .best_dist2 = std.math.maxInt(i64),
+        .count = if (c_pass) req.min_count else 0,
+    };
     return .{ .c_pass = c_pass, .native_pass = native_pass };
 }
 
@@ -330,6 +334,7 @@ pub fn buildBiomeCompareReqs(
 pub fn runNativeComparePass(
     constraints: []const Constraint,
     evals: []EvalState,
+    eval_epoch: u64,
     g: *c.Generator,
     anchor: c.Pos,
     biome_compare_reqs: []const BiomeCompareReq,
@@ -342,7 +347,7 @@ pub fn runNativeComparePass(
         const bi = cmp_req.idx;
         const req = constraints[bi].biome;
         const needed = nativeCompareNeeded(req, cmp_req, native_backend.strict);
-        const compare = evalBiomeThresholdAndProxy(req, &evals[bi], g, anchor, needed);
+        const compare = evalBiomeThresholdAndProxy(req, &evals[bi], eval_epoch, g, anchor, needed);
         const c_pass = compare.c_pass;
         const native_pass = compare.native_pass;
         const mismatch = c_pass != native_pass;
@@ -678,6 +683,7 @@ pub fn evalConstraintAt(
     aliases: []const usize,
     idx: usize,
     evals: []EvalState,
+    eval_epoch: u64,
     g: *c.Generator,
     seed: u64,
     mc: i32,
@@ -686,9 +692,12 @@ pub fn evalConstraintAt(
 ) bool {
     const alias_idx = aliases[idx];
     if (alias_idx != idx) {
-        _ = evalConstraintAt(constraints, aliases, alias_idx, evals, g, seed, mc, anchor, mode);
+        _ = evalConstraintAt(constraints, aliases, alias_idx, evals, eval_epoch, g, seed, mc, anchor, mode);
         evals[idx] = evals[alias_idx];
         return evals[idx].matched;
+    }
+    if (evals[idx].epoch != eval_epoch) {
+        evals[idx] = .{ .epoch = eval_epoch };
     }
     if (evals[idx].computed and (mode == .threshold or evals[idx].finalized)) return evals[idx].matched;
     evals[idx].computed = true;
@@ -718,6 +727,9 @@ pub fn evalConstraintAt(
         },
         .structure => |req| {
             if (mode == .full) {
+                evals[idx].matched = false;
+                evals[idx].count = 0;
+                evals[idx].best_dist2 = std.math.maxInt(i64);
                 evals[idx].finalized = true;
                 if (bestStructureDistanceWithinRadius(g, seed, mc, anchor, req)) |best| {
                     evals[idx].matched = true;
@@ -740,6 +752,7 @@ pub fn evalExpr(
     constraints: []const Constraint,
     aliases: []const usize,
     evals: []EvalState,
+    eval_epoch: u64,
     g: *c.Generator,
     seed: u64,
     mc: i32,
@@ -747,10 +760,10 @@ pub fn evalExpr(
 ) bool {
     return switch (nodes[root]) {
         .literal_true => true,
-        .atom => |idx| evalConstraintAt(constraints, aliases, idx, evals, g, seed, mc, anchor, .threshold),
-        .not => |child| !evalExpr(nodes, child, constraints, aliases, evals, g, seed, mc, anchor),
-        .and_op => |pair| evalExpr(nodes, pair.lhs, constraints, aliases, evals, g, seed, mc, anchor) and evalExpr(nodes, pair.rhs, constraints, aliases, evals, g, seed, mc, anchor),
-        .or_op => |pair| evalExpr(nodes, pair.lhs, constraints, aliases, evals, g, seed, mc, anchor) or evalExpr(nodes, pair.rhs, constraints, aliases, evals, g, seed, mc, anchor),
+        .atom => |idx| evalConstraintAt(constraints, aliases, idx, evals, eval_epoch, g, seed, mc, anchor, .threshold),
+        .not => |child| !evalExpr(nodes, child, constraints, aliases, evals, eval_epoch, g, seed, mc, anchor),
+        .and_op => |pair| evalExpr(nodes, pair.lhs, constraints, aliases, evals, eval_epoch, g, seed, mc, anchor) and evalExpr(nodes, pair.rhs, constraints, aliases, evals, eval_epoch, g, seed, mc, anchor),
+        .or_op => |pair| evalExpr(nodes, pair.lhs, constraints, aliases, evals, eval_epoch, g, seed, mc, anchor) or evalExpr(nodes, pair.rhs, constraints, aliases, evals, eval_epoch, g, seed, mc, anchor),
     };
 }
 
@@ -759,13 +772,14 @@ pub fn evalConjunctiveAtoms(
     constraints: []const Constraint,
     aliases: []const usize,
     evals: []EvalState,
+    eval_epoch: u64,
     g: *c.Generator,
     seed: u64,
     mc: i32,
     anchor: c.Pos,
 ) bool {
     for (atom_indices) |idx| {
-        if (!evalConstraintAt(constraints, aliases, idx, evals, g, seed, mc, anchor, .threshold)) return false;
+        if (!evalConstraintAt(constraints, aliases, idx, evals, eval_epoch, g, seed, mc, anchor, .threshold)) return false;
     }
     return true;
 }
@@ -774,6 +788,7 @@ pub fn evaluateAll(
     constraints: []const Constraint,
     aliases: []const usize,
     evals: []EvalState,
+    eval_epoch: u64,
     g: *c.Generator,
     seed: u64,
     mc: i32,
@@ -781,7 +796,7 @@ pub fn evaluateAll(
 ) void {
     for (constraints, 0..) |_, i| {
         if (aliases[i] != i) continue;
-        _ = evalConstraintAt(constraints, aliases, i, evals, g, seed, mc, anchor, .full);
+        _ = evalConstraintAt(constraints, aliases, i, evals, eval_epoch, g, seed, mc, anchor, .full);
     }
     for (constraints, 0..) |_, i| {
         const alias_idx = aliases[i];

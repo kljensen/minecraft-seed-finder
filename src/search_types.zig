@@ -68,6 +68,7 @@ pub const Constraint = union(enum) {
 };
 
 pub const EvalState = struct {
+    epoch: u64 = 0,
     computed: bool = false,
     finalized: bool = false,
     matched: bool = false,

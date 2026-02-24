@@ -170,10 +170,10 @@ test "biome threshold evaluation matches full evaluation decisions" {
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
 
         @memset(evals, .{});
-        const threshold = evalConstraintAt(&constraints, aliases, 0, evals, &gen, seed, mc, anchor, .threshold);
+        const threshold = evalConstraintAt(&constraints, aliases, 0, evals, 1, &gen, seed, mc, anchor, .threshold);
 
         @memset(evals, .{});
-        const full = evalConstraintAt(&constraints, aliases, 0, evals, &gen, seed, mc, anchor, .full);
+        const full = evalConstraintAt(&constraints, aliases, 0, evals, 1, &gen, seed, mc, anchor, .full);
 
         try std.testing.expectEqual(full, threshold);
     }
@@ -213,10 +213,10 @@ test "structure threshold evaluation matches full evaluation decisions" {
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
 
         @memset(evals, .{});
-        const threshold = evalConstraintAt(&constraints, aliases, 0, evals, &gen, seed, mc, anchor, .threshold);
+        const threshold = evalConstraintAt(&constraints, aliases, 0, evals, 1, &gen, seed, mc, anchor, .threshold);
 
         @memset(evals, .{});
-        const full = evalConstraintAt(&constraints, aliases, 0, evals, &gen, seed, mc, anchor, .full);
+        const full = evalConstraintAt(&constraints, aliases, 0, evals, 1, &gen, seed, mc, anchor, .full);
 
         try std.testing.expectEqual(full, threshold);
     }
@@ -287,8 +287,8 @@ test "conjunctive expression plan matches recursive evaluator" {
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
         @memset(evals_expr, .{});
         @memset(evals_plan, .{});
-        const recursive = evalExpr(parser.nodes.items, root, constraints.items, aliases, evals_expr, &gen, seed, mc, anchor);
-        const planned = evalConjunctiveAtoms(canonical_plan, constraints.items, aliases, evals_plan, &gen, seed, mc, anchor);
+        const recursive = evalExpr(parser.nodes.items, root, constraints.items, aliases, evals_expr, 1, &gen, seed, mc, anchor);
+        const planned = evalConjunctiveAtoms(canonical_plan, constraints.items, aliases, evals_plan, 1, &gen, seed, mc, anchor);
         try std.testing.expectEqual(recursive, planned);
     }
 }
@@ -373,8 +373,8 @@ test "canonical conjunctive plan deduplicates aliased atoms without changing dec
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
         @memset(evals_expr, .{});
         @memset(evals_plan, .{});
-        const recursive = evalExpr(parser.nodes.items, root, constraints.items, aliases, evals_expr, &gen, seed, mc, anchor);
-        const planned = evalConjunctiveAtoms(canonical_plan, constraints.items, aliases, evals_plan, &gen, seed, mc, anchor);
+        const recursive = evalExpr(parser.nodes.items, root, constraints.items, aliases, evals_expr, 1, &gen, seed, mc, anchor);
+        const planned = evalConjunctiveAtoms(canonical_plan, constraints.items, aliases, evals_plan, 1, &gen, seed, mc, anchor);
         try std.testing.expectEqual(recursive, planned);
     }
 }
@@ -503,14 +503,14 @@ test "evalBiomeThresholdAndProxy matches independent threshold/proxy decisions" 
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
         for (needs) |needed| {
             var eval_points: EvalState = .{};
-            const actual_points = evalBiomeThresholdAndProxy(req_points, &eval_points, &gen, anchor, needed);
+            const actual_points = evalBiomeThresholdAndProxy(req_points, &eval_points, 1, &gen, anchor, needed);
             const expected_points_c_pass = biomeMatchesPoints(&gen, biome_id, req_points.min_count, points);
             const expected_points_native_pass = nativeBiomeProxyCount(req_points, &gen, anchor, needed) >= needed;
             try std.testing.expectEqual(expected_points_c_pass, actual_points.c_pass);
             try std.testing.expectEqual(expected_points_native_pass, actual_points.native_pass);
 
             var eval_offsets: EvalState = .{};
-            const actual_offsets = evalBiomeThresholdAndProxy(req_offsets, &eval_offsets, &gen, anchor, needed);
+            const actual_offsets = evalBiomeThresholdAndProxy(req_offsets, &eval_offsets, 1, &gen, anchor, needed);
             const expected_offsets_c_pass = biomeMatchesWithinRadius(&gen, anchor, biome_id, req_offsets.min_count, offsets);
             const expected_offsets_native_pass = nativeBiomeProxyCount(req_offsets, &gen, anchor, needed) >= needed;
             try std.testing.expectEqual(expected_offsets_c_pass, actual_offsets.c_pass);
@@ -549,7 +549,7 @@ test "evalBiomeThresholdAndProxy sparse misses still match independent decisions
     };
 
     var eval = EvalState{};
-    const actual = evalBiomeThresholdAndProxy(req, &eval, &gen, anchor, 2);
+    const actual = evalBiomeThresholdAndProxy(req, &eval, 1, &gen, anchor, 2);
     const expected_c = biomeMatchesPoints(&gen, req.biome_id, req.min_count, req.points);
     var proxy_count: i32 = 0;
     for (req.points) |pt| {
@@ -826,8 +826,8 @@ test "opt-in perf: constraint aliasing duplicate-biome query" {
     for (seeds) |seed| {
         @memset(evals, .{});
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
-        _ = evalConstraintAt(&constraints, aliases_on, 0, evals, &gen, seed, mc, anchor, .threshold);
-        _ = evalConstraintAt(&constraints, aliases_on, 1, evals, &gen, seed, mc, anchor, .threshold);
+        _ = evalConstraintAt(&constraints, aliases_on, 0, evals, 1, &gen, seed, mc, anchor, .threshold);
+        _ = evalConstraintAt(&constraints, aliases_on, 1, evals, 1, &gen, seed, mc, anchor, .threshold);
         sum_on += @as(i128, @intFromBool(evals[0].matched)) + @as(i128, @intFromBool(evals[1].matched));
     }
     const on_ns = @as(u64, @intCast(std.time.nanoTimestamp() - start_on));
@@ -837,8 +837,8 @@ test "opt-in perf: constraint aliasing duplicate-biome query" {
     for (seeds) |seed| {
         @memset(evals, .{});
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
-        _ = evalConstraintAt(&constraints, aliases_off, 0, evals, &gen, seed, mc, anchor, .threshold);
-        _ = evalConstraintAt(&constraints, aliases_off, 1, evals, &gen, seed, mc, anchor, .threshold);
+        _ = evalConstraintAt(&constraints, aliases_off, 0, evals, 1, &gen, seed, mc, anchor, .threshold);
+        _ = evalConstraintAt(&constraints, aliases_off, 1, evals, 1, &gen, seed, mc, anchor, .threshold);
         sum_off += @as(i128, @intFromBool(evals[0].matched)) + @as(i128, @intFromBool(evals[1].matched));
     }
     const off_ns = @as(u64, @intCast(std.time.nanoTimestamp() - start_off));
@@ -929,7 +929,7 @@ test "search regression: spawn-anchor biome+structure query" {
         @memset(evals, .{});
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
         const spawn = c.getSpawn(&gen);
-        if (!evalExpr(parser.nodes.items, root, constraints.items, aliases, evals, &gen, seed, mc, spawn)) continue;
+        if (!evalExpr(parser.nodes.items, root, constraints.items, aliases, evals, 1, &gen, seed, mc, spawn)) continue;
         try found.append(seed);
     }
 
@@ -978,7 +978,7 @@ test "search regression: fixed-anchor biome-only query" {
     while (seed <= 1_000_000 and found.items.len < expected.len) : (seed += 1) {
         @memset(evals, .{});
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
-        if (!evalConstraintAt(constraints.items, aliases, 0, evals, &gen, seed, mc, anchor, .threshold)) continue;
+        if (!evalConstraintAt(constraints.items, aliases, 0, evals, 1, &gen, seed, mc, anchor, .threshold)) continue;
         try found.append(seed);
     }
 
@@ -1062,6 +1062,7 @@ fn snapshotSearchOutput(
             try runNativeComparePass(
                 constraints,
                 evals,
+                1,
                 &gen,
                 anchor,
                 biome_compare_reqs,
@@ -1070,11 +1071,11 @@ fn snapshotSearchOutput(
             );
         }
 
-        const matched = evalExpr(expr_nodes, expr_root, constraints, aliases, evals, &gen, seed, mc, anchor);
+        const matched = evalExpr(expr_nodes, expr_root, constraints, aliases, evals, 1, &gen, seed, mc, anchor);
         tested +%= 1;
         if (!matched) continue;
 
-        evaluateAll(constraints, aliases, evals, &gen, seed, mc, anchor);
+        evaluateAll(constraints, aliases, evals, 1, &gen, seed, mc, anchor);
         const summary = summarize(constraints, evals);
         const diagnostics = try diagnosticsString(allocator, constraints, evals);
         const candidate = MatchCandidate{

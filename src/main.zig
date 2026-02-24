@@ -195,6 +195,45 @@ fn appendNativeShadowRecord(
     try file.writer().writeByte('\n');
 }
 
+const PerfBreakdown = struct {
+    apply_seed_ns: u128 = 0,
+    get_spawn_ns: u128 = 0,
+    constraint_eval_ns: u128 = 0,
+    output_ns: u128 = 0,
+};
+
+fn appendPerfBreakdownRecord(
+    label: []const u8,
+    tested: u64,
+    found: usize,
+    breakdown: PerfBreakdown,
+) !void {
+    try std.fs.cwd().makePath("tmp/perf");
+    var file = std.fs.cwd().openFile("tmp/perf/hot_loop_breakdown.jsonl", .{ .mode = .read_write }) catch try std.fs.cwd().createFile("tmp/perf/hot_loop_breakdown.jsonl", .{});
+    defer file.close();
+    try file.seekFromEnd(0);
+
+    const Rec = struct {
+        label: []const u8,
+        tested: u64,
+        found: usize,
+        apply_seed_ns: u128,
+        get_spawn_ns: u128,
+        constraint_eval_ns: u128,
+        output_ns: u128,
+    };
+    try std.json.stringify(Rec{
+        .label = label,
+        .tested = tested,
+        .found = found,
+        .apply_seed_ns = breakdown.apply_seed_ns,
+        .get_spawn_ns = breakdown.get_spawn_ns,
+        .constraint_eval_ns = breakdown.constraint_eval_ns,
+        .output_ns = breakdown.output_ns,
+    }, .{ .whitespace = .minified }, file.writer());
+    try file.writer().writeByte('\n');
+}
+
 fn printUsage(writer: anytype) !void {
     try writer.print(
         "Usage:\n" ++
@@ -218,6 +257,7 @@ fn printUsage(writer: anytype) !void {
             "  --checkpoint <path>                  Save checkpoint state to path\n" ++
             "  --checkpoint-every <N>               Write checkpoint every N tested seeds\n" ++
             "  --resume                             Resume from checkpoint state\n" ++
+            "  --perf-breakdown <label>             Record/apply per-stage hot-loop timings into tmp/perf\n" ++
             "  --list-biomes                        List accepted biome names\n" ++
             "  --list-structures                    List accepted structure names\n" ++
             "  --output <path>                      Optional output file\n" ++
@@ -317,6 +357,7 @@ pub fn main() !void {
     var native_shadow = NativeShadow{};
     var native_shadow_max_mismatch_rate: ?f64 = null;
     var native_backend = NativeBackend{};
+    var perf_breakdown_label: ?[]const u8 = null;
 
     var biome_idx: usize = 0;
     var structure_idx: usize = 0;
@@ -369,6 +410,8 @@ pub fn main() !void {
             checkpoint_every = try std.fmt.parseInt(u64, s, 10);
         } else if (std.mem.eql(u8, arg, "--resume")) {
             do_resume = true;
+        } else if (std.mem.eql(u8, arg, "--perf-breakdown")) {
+            perf_breakdown_label = args.next() orelse return error.InvalidArguments;
         } else if (std.mem.eql(u8, arg, "--random")) {
             random_mode = true;
         } else if (std.mem.eql(u8, arg, "--random-samples")) {
@@ -550,7 +593,12 @@ pub fn main() !void {
     var rng_state: u64 = @as(u64, @bitCast(std.time.milliTimestamp()));
     const max_iterations = if (random_mode) (random_samples orelse std.math.maxInt(u64)) else max_seed - start_seed + 1;
     var iteration: u64 = 0;
+    var eval_epoch: u64 = 1;
     const native_compare_active = native_shadow.enabled or native_backend.compare_only;
+    const fixed_anchor = anchor_override != null;
+    const lazy_spawn = fixed_anchor and !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_LAZY_SPAWN");
+    const perf_enabled = perf_breakdown_label != null;
+    var perf_breakdown = PerfBreakdown{};
     var biome_compare_reqs: []BiomeCompareReq = &.{};
     defer if (biome_compare_reqs.len != 0) allocator.free(biome_compare_reqs);
     if (native_compare_active) {
@@ -571,11 +619,37 @@ pub fn main() !void {
             seed = start_seed +% iteration;
             if (seed > max_seed) break;
         }
-        @memset(evals, .{});
+        eval_epoch +%= 1;
+        if (eval_epoch == 0) {
+            if (evals.len != 0) @memset(evals, .{});
+            eval_epoch = 1;
+        }
 
+        var spawn: ?c.Pos = null;
+        const apply_seed_start = if (perf_enabled) std.time.nanoTimestamp() else 0;
         c.applySeed(&gen, c.DIM_OVERWORLD, seed);
-        const spawn = c.getSpawn(&gen);
-        const anchor = anchor_override orelse spawn;
+        if (perf_enabled) {
+            perf_breakdown.apply_seed_ns += @as(u128, @intCast(std.time.nanoTimestamp() - apply_seed_start));
+        }
+        const anchor = if (anchor_override) |fixed| blk: {
+            if (!lazy_spawn) {
+                const get_spawn_start = if (perf_enabled) std.time.nanoTimestamp() else 0;
+                spawn = c.getSpawn(&gen);
+                if (perf_enabled) {
+                    perf_breakdown.get_spawn_ns += @as(u128, @intCast(std.time.nanoTimestamp() - get_spawn_start));
+                }
+            }
+            break :blk fixed;
+        } else blk: {
+            const get_spawn_start = if (perf_enabled) std.time.nanoTimestamp() else 0;
+            const computed_spawn = c.getSpawn(&gen);
+            if (perf_enabled) {
+                perf_breakdown.get_spawn_ns += @as(u128, @intCast(std.time.nanoTimestamp() - get_spawn_start));
+            }
+            spawn = computed_spawn;
+            break :blk computed_spawn;
+        };
+        const constraint_eval_start = if (perf_enabled) std.time.nanoTimestamp() else 0;
         if (native_shadow.enabled) {
             const native_sig = nativeShadowProbe(seed, anchor);
             const c_sig = cShadowProbe(&gen, anchor);
@@ -592,6 +666,7 @@ pub fn main() !void {
             try runNativeComparePass(
                 constraints.items,
                 evals,
+                eval_epoch,
                 &gen,
                 anchor,
                 biome_compare_reqs,
@@ -603,20 +678,31 @@ pub fn main() !void {
         const matches_expr = if (expr_is_literal_true)
             true
         else if (conjunctive_eval_atoms) |atoms|
-            evalConjunctiveAtoms(atoms, constraints.items, aliases, evals, &gen, seed, mc, anchor)
+            evalConjunctiveAtoms(atoms, constraints.items, aliases, evals, eval_epoch, &gen, seed, mc, anchor)
         else
-            evalExpr(parser_or_nodes.items, expr_root, constraints.items, aliases, evals, &gen, seed, mc, anchor);
+            evalExpr(parser_or_nodes.items, expr_root, constraints.items, aliases, evals, eval_epoch, &gen, seed, mc, anchor);
+        if (perf_enabled) {
+            perf_breakdown.constraint_eval_ns += @as(u128, @intCast(std.time.nanoTimestamp() - constraint_eval_start));
+        }
 
         tested +%= 1;
 
         if (matches_expr) {
-            evaluateAll(constraints.items, aliases, evals, &gen, seed, mc, anchor);
+            if (lazy_spawn and spawn == null) {
+                const get_spawn_start = if (perf_enabled) std.time.nanoTimestamp() else 0;
+                spawn = c.getSpawn(&gen);
+                if (perf_enabled) {
+                    perf_breakdown.get_spawn_ns += @as(u128, @intCast(std.time.nanoTimestamp() - get_spawn_start));
+                }
+            }
+            const output_start = if (perf_enabled) std.time.nanoTimestamp() else 0;
+            evaluateAll(constraints.items, aliases, evals, eval_epoch, &gen, seed, mc, anchor);
             const summary = summarize(constraints.items, evals);
             const diagnostics = try diagnosticsString(allocator, constraints.items, evals);
 
             const candidate = MatchCandidate{
                 .seed = seed,
-                .spawn = spawn,
+                .spawn = spawn.?,
                 .anchor = anchor,
                 .score = summary.score,
                 .matched_constraints = summary.matched,
@@ -630,6 +716,9 @@ pub fn main() !void {
                 try emitResult(output_writer, output_format, candidate);
                 allocator.free(candidate.diagnostics);
                 found += 1;
+            }
+            if (perf_enabled) {
+                perf_breakdown.output_ns += @as(u128, @intCast(std.time.nanoTimestamp() - output_start));
             }
         }
 
@@ -681,6 +770,25 @@ pub fn main() !void {
         try stdout.print("summary: found={d} tested={d} mode=random\n", .{ found, tested });
     } else {
         try stdout.print("summary: found={d} tested={d} start_seed={d} end_seed={d}\n", .{ found, tested, start_seed, if (seed == 0) 0 else seed - 1 });
+    }
+    if (perf_breakdown_label) |label| {
+        const total_hot_ns = perf_breakdown.apply_seed_ns + perf_breakdown.get_spawn_ns + perf_breakdown.constraint_eval_ns + perf_breakdown.output_ns;
+        if (total_hot_ns > 0 and tested > 0) {
+            const total_hot_f = @as(f64, @floatFromInt(total_hot_ns));
+            try stdout.print(
+                "perf-breakdown[{s}]: tested={d} applySeed={d:.2}% getSpawn={d:.2}% eval={d:.2}% output={d:.2}% ns/seed={d:.1}\n",
+                .{
+                    label,
+                    tested,
+                    @as(f64, @floatFromInt(perf_breakdown.apply_seed_ns)) * 100.0 / total_hot_f,
+                    @as(f64, @floatFromInt(perf_breakdown.get_spawn_ns)) * 100.0 / total_hot_f,
+                    @as(f64, @floatFromInt(perf_breakdown.constraint_eval_ns)) * 100.0 / total_hot_f,
+                    @as(f64, @floatFromInt(perf_breakdown.output_ns)) * 100.0 / total_hot_f,
+                    total_hot_f / @as(f64, @floatFromInt(tested)),
+                },
+            );
+        }
+        try appendPerfBreakdownRecord(label, tested, found, perf_breakdown);
     }
     if (native_shadow.enabled) {
         const mean_abs_diff = if (native_shadow.compared == 0) 0.0 else native_shadow.abs_diff_sum / @as(f64, @floatFromInt(native_shadow.compared));
