@@ -4,4 +4,5 @@ test {
     _ = @import("parity_test.zig");
     _ = @import("gen_parity_vectors.zig");
     _ = @import("main.zig");
+    _ = @import("main_tests.zig");
 }
