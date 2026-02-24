@@ -216,6 +216,7 @@ pub const EvalTelemetry = struct {
 var active_eval_telemetry: ?*EvalTelemetry = null;
 var structure_bbox_prune_enabled = true;
 var conjunctive_cost_order_enabled = true;
+var structure_fast_pos_enabled = true;
 
 pub fn setEvalTelemetry(telemetry: ?*EvalTelemetry) void {
     active_eval_telemetry = telemetry;
@@ -230,6 +231,17 @@ pub fn noteEvalSeedTested() void {
 pub fn setOptimizationToggles(structure_bbox_prune: bool, conjunctive_cost_order: bool) void {
     structure_bbox_prune_enabled = structure_bbox_prune;
     conjunctive_cost_order_enabled = conjunctive_cost_order;
+}
+
+pub fn setStructureFastPosEnabled(enabled: bool) void {
+    structure_fast_pos_enabled = enabled;
+}
+
+inline fn getStructurePosForReq(req: StructureReq, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?bedrock.Pos {
+    if (!structure_fast_pos_enabled) {
+        return bedrock.getStructurePosC(req.structure_c, mc, seed, reg_x, reg_z);
+    }
+    return bedrock.getStructurePosFast(req.structure_c, mc, seed, reg_x, reg_z, req.pos_mode, req.cfg_raw);
 }
 
 fn chunkRange(cfg: bedrock.StructureConfig) i32 {
@@ -688,16 +700,8 @@ pub fn bestStructureDistanceWithinRadius(g: *c.Generator, seed: u64, mc: i32, ce
     if (req.regions.len != 0) {
         for (req.regions) |reg| {
             if (telemetry) |t| t.structure_region_candidates +%= 1;
-            if (structure_bbox_prune_enabled) {
-                if (req.cfg) |cfg| {
-                    if (!regionMayIntersectRadius(center, cfg, reg.reg_x, reg.reg_z, r2)) {
-                        if (telemetry) |t| t.structure_region_bbox_rejects +%= 1;
-                        continue;
-                    }
-                }
-            }
             if (telemetry) |t| t.structure_get_pos_calls +%= 1;
-            const pos = bedrock.getStructurePosC(req.structure_c, mc, seed, reg.reg_x, reg.reg_z) orelse continue;
+            const pos = getStructurePosForReq(req, mc, seed, reg.reg_x, reg.reg_z) orelse continue;
             const dx = pos.x - center.x;
             const dz = pos.z - center.z;
             const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
@@ -734,7 +738,7 @@ pub fn bestStructureDistanceWithinRadius(g: *c.Generator, seed: u64, mc: i32, ce
                     continue;
                 }
                 if (telemetry) |t| t.structure_get_pos_calls +%= 1;
-                const pos = bedrock.getStructurePosC(req.structure_c, mc, seed, reg_x, reg_z) orelse continue;
+                const pos = getStructurePosForReq(req, mc, seed, reg_x, reg_z) orelse continue;
                 const dx = pos.x - center.x;
                 const dz = pos.z - center.z;
                 const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
@@ -761,16 +765,8 @@ pub fn anyStructureWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.P
     if (req.regions.len != 0) {
         for (req.regions) |reg| {
             if (telemetry) |t| t.structure_region_candidates +%= 1;
-            if (structure_bbox_prune_enabled) {
-                if (req.cfg) |cfg| {
-                    if (!regionMayIntersectRadius(center, cfg, reg.reg_x, reg.reg_z, r2)) {
-                        if (telemetry) |t| t.structure_region_bbox_rejects +%= 1;
-                        continue;
-                    }
-                }
-            }
             if (telemetry) |t| t.structure_get_pos_calls +%= 1;
-            const pos = bedrock.getStructurePosC(req.structure_c, mc, seed, reg.reg_x, reg.reg_z) orelse continue;
+            const pos = getStructurePosForReq(req, mc, seed, reg.reg_x, reg.reg_z) orelse continue;
             const dx = pos.x - center.x;
             const dz = pos.z - center.z;
             const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
@@ -811,7 +807,7 @@ pub fn anyStructureWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.P
                 continue;
             }
             if (telemetry) |t| t.structure_get_pos_calls +%= 1;
-            const pos = bedrock.getStructurePosC(req.structure_c, mc, seed, reg_x, reg_z) orelse continue;
+            const pos = getStructurePosForReq(req, mc, seed, reg_x, reg_z) orelse continue;
             const dx = pos.x - center.x;
             const dz = pos.z - center.z;
             const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;

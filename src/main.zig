@@ -520,6 +520,8 @@ pub fn main() !void {
                 .radius2 = @as(i64, parsed.radius) * parsed.radius,
                 .structure_c = st.toC(),
                 .cfg = null,
+                .cfg_raw = null,
+                .pos_mode = .generic,
                 .regions = &.{},
             } });
             try structure_constraint_ids.append(constraints.items.len - 1);
@@ -554,6 +556,8 @@ pub fn main() !void {
             },
             .structure => |*req| {
                 req.cfg = bedrock.getStructureConfig(req.structure, mc);
+                req.cfg_raw = bedrock.getStructureConfigRaw(req.structure_c, mc);
+                req.pos_mode = bedrock.posModeForStructure(req.structure_c);
                 if (anchor_override) |anchor| {
                     req.regions = try buildStructureRegionsForAnchor(allocator, anchor, req.*);
                 }
@@ -642,7 +646,9 @@ pub fn main() !void {
     defer allocator.free(aliases);
     const structure_bbox_prune = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_STRUCTURE_BBOX_PRUNE");
     const conjunctive_cost_order = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_CONJUNCTIVE_COST_ORDER");
+    const structure_fast_pos = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_STRUCTURE_FAST_POS");
     search_eval.setOptimizationToggles(structure_bbox_prune, conjunctive_cost_order);
+    search_eval.setStructureFastPosEnabled(structure_fast_pos);
     if (conjunctive_atoms) |atoms| {
         conjunctive_eval_atoms = try canonicalizeConjunctiveAtomPlan(allocator, atoms, aliases);
         if (conjunctive_eval_atoms) |eval_atoms| {

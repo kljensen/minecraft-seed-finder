@@ -38,6 +38,8 @@ pub const StructureReq = struct {
     radius2: i64,
     structure_c: c_int,
     cfg: ?bedrock.StructureConfig,
+    cfg_raw: ?c.StructureConfig = null,
+    pos_mode: bedrock.StructurePosMode = .generic,
     regions: []StructureRegion = &.{},
 };
 
