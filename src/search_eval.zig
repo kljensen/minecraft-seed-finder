@@ -22,6 +22,177 @@ const BiomeScanResult = struct {
     count: i32,
 };
 
+const CachedBiomeSampler = struct {
+    g: *c.Generator,
+    cache: [*c]c_int,
+    range: c.Range,
+
+    fn init(g: *c.Generator, scale: c_int, y: c_int) ?CachedBiomeSampler {
+        const r = c.Range{
+            .scale = scale,
+            .x = 0,
+            .z = 0,
+            .sx = 1,
+            .sz = 1,
+            .y = y,
+            .sy = 1,
+        };
+        const cache = c.allocCache(g, r);
+        if (cache == null) return null;
+        return .{
+            .g = g,
+            .cache = cache,
+            .range = r,
+        };
+    }
+
+    fn deinit(self: *CachedBiomeSampler) void {
+        c.free(@as(?*anyopaque, @ptrCast(self.cache)));
+    }
+
+    fn getBiomeAt(self: *CachedBiomeSampler, x: i32, z: i32) i32 {
+        self.range.x = x;
+        self.range.z = z;
+        if (c.genBiomes(self.g, self.cache, self.range) == 0) {
+            return self.cache[0];
+        }
+        return c.getBiomeAt(self.g, self.range.scale, x, self.range.y, z);
+    }
+};
+
+const CachedBiomeRowSampler = struct {
+    g: *c.Generator,
+    cache: [*c]c_int,
+    range: c.Range,
+
+    fn init(g: *c.Generator, scale: c_int, y: c_int, max_width: i32) ?CachedBiomeRowSampler {
+        if (max_width <= 0) return null;
+        const r = c.Range{
+            .scale = scale,
+            .x = 0,
+            .z = 0,
+            .sx = max_width,
+            .sz = 1,
+            .y = y,
+            .sy = 1,
+        };
+        const cache = c.allocCache(g, r);
+        if (cache == null) return null;
+        return .{
+            .g = g,
+            .cache = cache,
+            .range = r,
+        };
+    }
+
+    fn deinit(self: *CachedBiomeRowSampler) void {
+        c.free(@as(?*anyopaque, @ptrCast(self.cache)));
+    }
+
+    fn sampleRow(self: *CachedBiomeRowSampler, start_x: i32, z: i32, width: i32) bool {
+        self.range.x = start_x;
+        self.range.z = z;
+        self.range.sx = width;
+        self.range.sz = 1;
+        return c.genBiomes(self.g, self.cache, self.range) == 0;
+    }
+
+    fn getBiomeAt(self: *const CachedBiomeRowSampler, dx: i32) i32 {
+        return self.cache[@as(usize, @intCast(dx))];
+    }
+};
+
+const RowRun = struct {
+    start: usize,
+    end: usize,
+    z: i32,
+    min_x: i32,
+    max_x: i32,
+};
+
+fn rowRunWidth(run: RowRun) i32 {
+    return run.max_x - run.min_x + 1;
+}
+
+fn sampleBiomeScalar(g: *c.Generator, sampler_opt: *?CachedBiomeSampler, x: i32, z: i32) i32 {
+    return if (sampler_opt.*) |*sampler|
+        sampler.getBiomeAt(x, z)
+    else
+        c.getBiomeAt(g, 1, x, 0, z);
+}
+
+fn nextOffsetRun(center: c.Pos, offsets: []const BiomeOffset, start: usize) RowRun {
+    const first = offsets[start];
+    const z = center.z + first.dz;
+    const min_x = center.x + first.dx;
+    var max_x = min_x;
+    var prev_x = min_x;
+    var i = start + 1;
+    while (i < offsets.len) : (i += 1) {
+        const off = offsets[i];
+        const x = center.x + off.dx;
+        const row_z = center.z + off.dz;
+        if (row_z != z or x != prev_x + 4) break;
+        prev_x = x;
+        max_x = x;
+    }
+    return .{
+        .start = start,
+        .end = i,
+        .z = z,
+        .min_x = min_x,
+        .max_x = max_x,
+    };
+}
+
+fn nextPointRun(points: []const BiomePoint, start: usize) RowRun {
+    const first = points[start];
+    const z = first.z;
+    const min_x = first.x;
+    var max_x = min_x;
+    var prev_x = min_x;
+    var i = start + 1;
+    while (i < points.len) : (i += 1) {
+        const pt = points[i];
+        if (pt.z != z or pt.x != prev_x + 4) break;
+        prev_x = pt.x;
+        max_x = pt.x;
+    }
+    return .{
+        .start = start,
+        .end = i,
+        .z = z,
+        .min_x = min_x,
+        .max_x = max_x,
+    };
+}
+
+fn maxOffsetRunWidth(center: c.Pos, offsets: []const BiomeOffset) i32 {
+    if (offsets.len == 0) return 0;
+    var i: usize = 0;
+    var max_width: i32 = 1;
+    while (i < offsets.len) {
+        const run = nextOffsetRun(center, offsets, i);
+        const width = rowRunWidth(run);
+        if (width > max_width) max_width = width;
+        i = run.end;
+    }
+    return max_width;
+}
+
+fn maxPointRunWidth(points: []const BiomePoint) i32 {
+    if (points.len == 0) return 0;
+    var i: usize = 0;
+    var max_width: i32 = 1;
+    while (i < points.len) {
+        const run = nextPointRun(points, i);
+        const width = rowRunWidth(run);
+        if (width > max_width) max_width = width;
+        i = run.end;
+    }
+    return max_width;
+}
+
 fn floorDiv(a: i32, b: i32) i32 {
     return std.math.divFloor(i32, a, b) catch unreachable;
 }
@@ -29,16 +200,26 @@ fn floorDiv(a: i32, b: i32) i32 {
 pub fn nativeBiomeProxyCount(req: BiomeReq, g: *c.Generator, anchor: c.Pos, needed: i32) i32 {
     if (needed <= 0) return 0;
     var count: i32 = 0;
+    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    defer if (sampler_opt) |*sampler| sampler.deinit();
 
     if (req.points.len > 0) {
         for (req.points) |pt| {
-            const id = c.getBiomeAt(g, 1, pt.x, 0, pt.z);
+            const id = if (sampler_opt) |*sampler|
+                sampler.getBiomeAt(pt.x, pt.z)
+            else
+                c.getBiomeAt(g, 1, pt.x, 0, pt.z);
             if (id == req.biome_id) count += 1;
             if (count >= needed) break;
         }
     } else {
         for (req.offsets) |off| {
-            const id = c.getBiomeAt(g, 1, anchor.x + off.dx, 0, anchor.z + off.dz);
+            const x = anchor.x + off.dx;
+            const z = anchor.z + off.dz;
+            const id = if (sampler_opt) |*sampler|
+                sampler.getBiomeAt(x, z)
+            else
+                c.getBiomeAt(g, 1, x, 0, z);
             if (id == req.biome_id) count += 1;
             if (count >= needed) break;
         }
@@ -66,12 +247,17 @@ pub fn evalBiomeThresholdAndProxy(
     var count: i32 = 0;
     var c_pass = false;
     var native_pass = false;
+    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    defer if (sampler_opt) |*sampler| sampler.deinit();
 
     if (req.points.len > 0) {
         var remaining: i32 = @intCast(req.points.len);
         for (req.points) |pt| {
             remaining -= 1;
-            const id = c.getBiomeAt(g, 1, pt.x, 0, pt.z);
+            const id = if (sampler_opt) |*sampler|
+                sampler.getBiomeAt(pt.x, pt.z)
+            else
+                c.getBiomeAt(g, 1, pt.x, 0, pt.z);
             if (id == req.biome_id) {
                 count += 1;
                 if (!native_pass and count >= needed) native_pass = true;
@@ -86,7 +272,12 @@ pub fn evalBiomeThresholdAndProxy(
         var remaining: i32 = @intCast(req.offsets.len);
         for (req.offsets) |off| {
             remaining -= 1;
-            const id = c.getBiomeAt(g, 1, anchor.x + off.dx, 0, anchor.z + off.dz);
+            const x = anchor.x + off.dx;
+            const z = anchor.z + off.dz;
+            const id = if (sampler_opt) |*sampler|
+                sampler.getBiomeAt(x, z)
+            else
+                c.getBiomeAt(g, 1, x, 0, z);
             if (id == req.biome_id) {
                 count += 1;
                 if (!native_pass and count >= needed) native_pass = true;
@@ -238,14 +429,34 @@ pub fn buildBiomePointsForAnchor(allocator: std.mem.Allocator, center: c.Pos, of
 pub fn scanBiomeWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, offsets: []const BiomeOffset) BiomeScanResult {
     var best: i64 = std.math.maxInt(i64);
     var count: i32 = 0;
+    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    defer if (sampler_opt) |*sampler| sampler.deinit();
+    var row_sampler_opt = CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
+    defer if (row_sampler_opt) |*sampler| sampler.deinit();
 
-    if (offsets.len > 0) {
-        for (offsets) |off| {
-            const id = c.getBiomeAt(g, 1, center.x + off.dx, 0, center.z + off.dz);
+    var i: usize = 0;
+    while (i < offsets.len) {
+        const run = nextOffsetRun(center, offsets, i);
+        const run_width = rowRunWidth(run);
+        var row_ready = false;
+        var row_sampler_ptr: ?*CachedBiomeRowSampler = null;
+        if (row_sampler_opt) |*row_sampler| {
+            row_sampler_ptr = row_sampler;
+            row_ready = row_sampler.sampleRow(run.min_x, run.z, run_width);
+        }
+        var j = run.start;
+        while (j < run.end) : (j += 1) {
+            const off = offsets[j];
+            const x = center.x + off.dx;
+            const id = if (row_ready)
+                row_sampler_ptr.?.getBiomeAt(x - run.min_x)
+            else
+                sampleBiomeScalar(g, &sampler_opt, x, run.z);
             if (id != biome_id) continue;
             count += 1;
             if (off.dist2 < best) best = off.dist2;
         }
+        i = run.end;
     }
 
     return .{ .best_dist2 = best, .count = count };
@@ -254,11 +465,33 @@ pub fn scanBiomeWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, offs
 pub fn scanBiomePoints(g: *c.Generator, biome_id: i32, points: []const BiomePoint) BiomeScanResult {
     var best: i64 = std.math.maxInt(i64);
     var count: i32 = 0;
-    for (points) |pt| {
-        const id = c.getBiomeAt(g, 1, pt.x, 0, pt.z);
-        if (id != biome_id) continue;
-        count += 1;
-        if (pt.dist2 < best) best = pt.dist2;
+    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    defer if (sampler_opt) |*sampler| sampler.deinit();
+    var row_sampler_opt = CachedBiomeRowSampler.init(g, 1, 0, maxPointRunWidth(points));
+    defer if (row_sampler_opt) |*sampler| sampler.deinit();
+
+    var i: usize = 0;
+    while (i < points.len) {
+        const run = nextPointRun(points, i);
+        const run_width = rowRunWidth(run);
+        var row_ready = false;
+        var row_sampler_ptr: ?*CachedBiomeRowSampler = null;
+        if (row_sampler_opt) |*row_sampler| {
+            row_sampler_ptr = row_sampler;
+            row_ready = row_sampler.sampleRow(run.min_x, run.z, run_width);
+        }
+        var j = run.start;
+        while (j < run.end) : (j += 1) {
+            const pt = points[j];
+            const id = if (row_ready)
+                row_sampler_ptr.?.getBiomeAt(pt.x - run.min_x)
+            else
+                sampleBiomeScalar(g, &sampler_opt, pt.x, pt.z);
+            if (id != biome_id) continue;
+            count += 1;
+            if (pt.dist2 < best) best = pt.dist2;
+        }
+        i = run.end;
     }
     return .{ .best_dist2 = best, .count = count };
 }
@@ -266,14 +499,37 @@ pub fn scanBiomePoints(g: *c.Generator, biome_id: i32, points: []const BiomePoin
 pub fn biomeMatchesWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, min_count: i32, offsets: []const BiomeOffset) bool {
     if (min_count <= 0) return true;
     var count: i32 = 0;
-    for (offsets, 0..) |off, i| {
-        const id = c.getBiomeAt(g, 1, center.x + off.dx, 0, center.z + off.dz);
-        if (id == biome_id) {
-            count += 1;
-            if (count >= min_count) return true;
+    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    defer if (sampler_opt) |*sampler| sampler.deinit();
+    var row_sampler_opt = CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
+    defer if (row_sampler_opt) |*sampler| sampler.deinit();
+
+    var i: usize = 0;
+    while (i < offsets.len) {
+        const run = nextOffsetRun(center, offsets, i);
+        const run_width = rowRunWidth(run);
+        var row_ready = false;
+        var row_sampler_ptr: ?*CachedBiomeRowSampler = null;
+        if (row_sampler_opt) |*row_sampler| {
+            row_sampler_ptr = row_sampler;
+            row_ready = row_sampler.sampleRow(run.min_x, run.z, run_width);
         }
-        const remaining = offsets.len - i - 1;
-        if (count + @as(i32, @intCast(remaining)) < min_count) return false;
+        var j = run.start;
+        while (j < run.end) : (j += 1) {
+            const off = offsets[j];
+            const x = center.x + off.dx;
+            const id = if (row_ready)
+                row_sampler_ptr.?.getBiomeAt(x - run.min_x)
+            else
+                sampleBiomeScalar(g, &sampler_opt, x, run.z);
+            if (id == biome_id) {
+                count += 1;
+                if (count >= min_count) return true;
+            }
+            const remaining = offsets.len - j - 1;
+            if (count + @as(i32, @intCast(remaining)) < min_count) return false;
+        }
+        i = run.end;
     }
     return false;
 }
@@ -281,14 +537,36 @@ pub fn biomeMatchesWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, m
 pub fn biomeMatchesPoints(g: *c.Generator, biome_id: i32, min_count: i32, points: []const BiomePoint) bool {
     if (min_count <= 0) return true;
     var count: i32 = 0;
-    for (points, 0..) |pt, i| {
-        const id = c.getBiomeAt(g, 1, pt.x, 0, pt.z);
-        if (id == biome_id) {
-            count += 1;
-            if (count >= min_count) return true;
+    var sampler_opt = CachedBiomeSampler.init(g, 1, 0);
+    defer if (sampler_opt) |*sampler| sampler.deinit();
+    var row_sampler_opt = CachedBiomeRowSampler.init(g, 1, 0, maxPointRunWidth(points));
+    defer if (row_sampler_opt) |*sampler| sampler.deinit();
+
+    var i: usize = 0;
+    while (i < points.len) {
+        const run = nextPointRun(points, i);
+        const run_width = rowRunWidth(run);
+        var row_ready = false;
+        var row_sampler_ptr: ?*CachedBiomeRowSampler = null;
+        if (row_sampler_opt) |*row_sampler| {
+            row_sampler_ptr = row_sampler;
+            row_ready = row_sampler.sampleRow(run.min_x, run.z, run_width);
         }
-        const remaining = points.len - i - 1;
-        if (count + @as(i32, @intCast(remaining)) < min_count) return false;
+        var j = run.start;
+        while (j < run.end) : (j += 1) {
+            const pt = points[j];
+            const id = if (row_ready)
+                row_sampler_ptr.?.getBiomeAt(pt.x - run.min_x)
+            else
+                sampleBiomeScalar(g, &sampler_opt, pt.x, pt.z);
+            if (id == biome_id) {
+                count += 1;
+                if (count >= min_count) return true;
+            }
+            const remaining = points.len - j - 1;
+            if (count + @as(i32, @intCast(remaining)) < min_count) return false;
+        }
+        i = run.end;
     }
     return false;
 }

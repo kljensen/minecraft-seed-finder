@@ -84,6 +84,76 @@ const WorkerResult = struct {
     timing: Timing = .{},
 };
 
+const CachedBiomeSampler = struct {
+    g: *c.Generator,
+    cache: [*c]c_int,
+    range: c.Range,
+
+    fn init(g: *c.Generator, scale: c_int, y: c_int) ?CachedBiomeSampler {
+        const r = c.Range{
+            .scale = scale,
+            .x = 0,
+            .z = 0,
+            .sx = 1,
+            .sz = 1,
+            .y = y,
+            .sy = 1,
+        };
+        const cache = c.allocCache(g, r);
+        if (cache == null) return null;
+        return .{
+            .g = g,
+            .cache = cache,
+            .range = r,
+        };
+    }
+
+    fn deinit(self: *CachedBiomeSampler) void {
+        c.free(@as(?*anyopaque, @ptrCast(self.cache)));
+    }
+
+    fn getBiomeAt(self: *CachedBiomeSampler, x: i32, z: i32) i32 {
+        self.range.x = x;
+        self.range.z = z;
+        if (c.genBiomes(self.g, self.cache, self.range) == 0) {
+            return self.cache[0];
+        }
+        return c.getBiomeAt(self.g, self.range.scale, x, self.range.y, z);
+    }
+};
+
+const BiomeSamplers = struct {
+    s1: ?CachedBiomeSampler = null,
+    s4: ?CachedBiomeSampler = null,
+
+    fn init(g: *c.Generator, enable_cached: bool) BiomeSamplers {
+        if (!enable_cached) return .{};
+        return .{
+            .s1 = CachedBiomeSampler.init(g, 1, 0),
+            .s4 = CachedBiomeSampler.init(g, 4, 0),
+        };
+    }
+
+    fn deinit(self: *BiomeSamplers) void {
+        if (self.s1) |*sampler| sampler.deinit();
+        if (self.s4) |*sampler| sampler.deinit();
+    }
+
+    fn getBiome1(self: *BiomeSamplers, g: *c.Generator, x: i32, z: i32) i32 {
+        return if (self.s1) |*sampler|
+            sampler.getBiomeAt(x, z)
+        else
+            c.getBiomeAt(g, 1, x, 0, z);
+    }
+
+    fn getBiome4(self: *BiomeSamplers, g: *c.Generator, x: i32, z: i32) i32 {
+        return if (self.s4) |*sampler|
+            sampler.getBiomeAt(x, z)
+        else
+            c.getBiomeAt(g, 4, x, 0, z);
+    }
+};
+
 fn freeWorkerResult(result: *const WorkerResult, allocator: std.mem.Allocator) void {
     allocator.free(result.spawns);
     allocator.free(result.biomes);
@@ -195,6 +265,7 @@ fn appendBiomeVectors(
     cfg: WorkerConfig,
     seed: u64,
     gen: *c.Generator,
+    samplers: *BiomeSamplers,
     biomes: *std.ArrayList(BiomeVector),
 ) void {
     const out_start = biomes.items.len;
@@ -214,16 +285,20 @@ fn appendBiomeVectors(
             inline for (0..4) |lane| {
                 const x = xs[lane];
                 const z = zs[lane];
-                const b1 = c.getBiomeAt(gen, 1, x, 0, z);
-                const b4 = c.getBiomeAt(gen, 4, divFloorBy4(x), 0, divFloorBy4(z));
+                const b1 = samplers.getBiome1(gen, x, z);
+                const b4x = divFloorBy4(x);
+                const b4z = divFloorBy4(z);
+                const b4 = samplers.getBiome4(gen, b4x, b4z);
                 out[bi + lane] = .{ .mc = cfg.mc, .seed = seed, .x = x, .z = z, .b1 = b1, .b4 = b4 };
             }
         }
         while (bi < cfg.biome_samples_per_seed) : (bi += 1) {
             const x = sampleCoordWithWidth(&sample_state, biome_width, cfg.biome_span);
             const z = sampleCoordWithWidth(&sample_state, biome_width, cfg.biome_span);
-            const b1 = c.getBiomeAt(gen, 1, x, 0, z);
-            const b4 = c.getBiomeAt(gen, 4, divFloorBy4(x), 0, divFloorBy4(z));
+            const b1 = samplers.getBiome1(gen, x, z);
+            const b4x = divFloorBy4(x);
+            const b4z = divFloorBy4(z);
+            const b4 = samplers.getBiome4(gen, b4x, b4z);
             out[bi] = .{ .mc = cfg.mc, .seed = seed, .x = x, .z = z, .b1 = b1, .b4 = b4 };
         }
         return;
@@ -233,8 +308,8 @@ fn appendBiomeVectors(
     while (bi < cfg.biome_samples_per_seed) : (bi += 1) {
         const x = sampleCoordWithWidth(&sample_state, biome_width, cfg.biome_span);
         const z = sampleCoordWithWidth(&sample_state, biome_width, cfg.biome_span);
-        const b1 = c.getBiomeAt(gen, 1, x, 0, z);
-        const b4 = c.getBiomeAt(gen, 4, divFloorBy4(x), 0, divFloorBy4(z));
+        const b1 = samplers.getBiome1(gen, x, z);
+        const b4 = samplers.getBiome4(gen, divFloorBy4(x), divFloorBy4(z));
         out[bi] = .{ .mc = cfg.mc, .seed = seed, .x = x, .z = z, .b1 = b1, .b4 = b4 };
     }
 }
@@ -272,6 +347,7 @@ fn processSeedFast(
     cfg: WorkerConfig,
     seed: u64,
     gen: *c.Generator,
+    samplers: *BiomeSamplers,
     spawns: *std.ArrayList(SpawnVector),
     biomes: *std.ArrayList(BiomeVector),
     structure_vectors: *std.ArrayList(StructureVector),
@@ -279,7 +355,7 @@ fn processSeedFast(
     c.applySeed(gen, c.DIM_OVERWORLD, seed);
     const spawn = c.getSpawn(gen);
     spawns.appendAssumeCapacity(.{ .mc = cfg.mc, .seed = seed, .x = spawn.x, .z = spawn.z });
-    appendBiomeVectors(cfg, seed, gen, biomes);
+    appendBiomeVectors(cfg, seed, gen, samplers, biomes);
     appendStructureVectors(cfg, seed, cfg.regions, gen, structure_vectors);
 }
 
@@ -287,6 +363,7 @@ fn processSeedTimed(
     cfg: WorkerConfig,
     seed: u64,
     gen: *c.Generator,
+    samplers: *BiomeSamplers,
     spawns: *std.ArrayList(SpawnVector),
     biomes: *std.ArrayList(BiomeVector),
     structure_vectors: *std.ArrayList(StructureVector),
@@ -297,7 +374,7 @@ fn processSeedTimed(
     const spawn = c.getSpawn(gen);
     spawns.appendAssumeCapacity(.{ .mc = cfg.mc, .seed = seed, .x = spawn.x, .z = spawn.z });
     const spawn_end_ns = std.time.nanoTimestamp();
-    appendBiomeVectors(cfg, seed, gen, biomes);
+    appendBiomeVectors(cfg, seed, gen, samplers, biomes);
     const biome_end_ns = std.time.nanoTimestamp();
     appendStructureVectors(cfg, seed, cfg.regions, gen, structure_vectors);
     const structure_end_ns = std.time.nanoTimestamp();
@@ -317,6 +394,8 @@ fn processRangeAppend(
 ) void {
     var gen: c.Generator = undefined;
     c.setupGenerator(&gen, cfg.mc, 0);
+    var samplers = BiomeSamplers.init(&gen, cfg.use_simd);
+    defer samplers.deinit();
 
     var si: usize = cfg.seed_start;
     const simd_seed_end = cfg.seed_end - ((cfg.seed_end - cfg.seed_start) & @as(usize, 3));
@@ -324,25 +403,25 @@ fn processRangeAppend(
         while (si < simd_seed_end) : (si += 4) {
             const seeds = genSeedSaltedSimd4(si, cfg.seed_salt);
             inline for (0..4) |lane| {
-                const lane_timing = processSeedTimed(cfg, seeds[lane], &gen, spawns, biomes, structure_vectors);
+                const lane_timing = processSeedTimed(cfg, seeds[lane], &gen, &samplers, spawns, biomes, structure_vectors);
                 appendTiming(timing, lane_timing);
             }
         }
         while (si < cfg.seed_end) : (si += 1) {
             const seed = genSeedSalted(si, cfg.seed_salt);
-            const lane_timing = processSeedTimed(cfg, seed, &gen, spawns, biomes, structure_vectors);
+            const lane_timing = processSeedTimed(cfg, seed, &gen, &samplers, spawns, biomes, structure_vectors);
             appendTiming(timing, lane_timing);
         }
     } else {
         while (si < simd_seed_end) : (si += 4) {
             const seeds = genSeedSaltedSimd4(si, cfg.seed_salt);
             inline for (0..4) |lane| {
-                processSeedFast(cfg, seeds[lane], &gen, spawns, biomes, structure_vectors);
+                processSeedFast(cfg, seeds[lane], &gen, &samplers, spawns, biomes, structure_vectors);
             }
         }
         while (si < cfg.seed_end) : (si += 1) {
             const seed = genSeedSalted(si, cfg.seed_salt);
-            processSeedFast(cfg, seed, &gen, spawns, biomes, structure_vectors);
+            processSeedFast(cfg, seed, &gen, &samplers, spawns, biomes, structure_vectors);
         }
     }
 }
@@ -363,6 +442,8 @@ fn processRange(cfg: WorkerConfig, allocator: std.mem.Allocator) !WorkerResult {
 
     var gen: c.Generator = undefined;
     c.setupGenerator(&gen, cfg.mc, 0);
+    var samplers = BiomeSamplers.init(&gen, cfg.use_simd);
+    defer samplers.deinit();
 
     var si: usize = cfg.seed_start;
     const simd_seed_end = cfg.seed_end - ((cfg.seed_end - cfg.seed_start) & @as(usize, 3));
@@ -370,25 +451,25 @@ fn processRange(cfg: WorkerConfig, allocator: std.mem.Allocator) !WorkerResult {
         while (si < simd_seed_end) : (si += 4) {
             const seeds = genSeedSaltedSimd4(si, cfg.seed_salt);
             inline for (0..4) |lane| {
-                const lane_timing = processSeedTimed(cfg, seeds[lane], &gen, &spawns, &biomes, &structure_vectors);
+                const lane_timing = processSeedTimed(cfg, seeds[lane], &gen, &samplers, &spawns, &biomes, &structure_vectors);
                 appendTiming(&timing, lane_timing);
             }
         }
         while (si < cfg.seed_end) : (si += 1) {
             const seed = genSeedSalted(si, cfg.seed_salt);
-            const lane_timing = processSeedTimed(cfg, seed, &gen, &spawns, &biomes, &structure_vectors);
+            const lane_timing = processSeedTimed(cfg, seed, &gen, &samplers, &spawns, &biomes, &structure_vectors);
             appendTiming(&timing, lane_timing);
         }
     } else {
         while (si < simd_seed_end) : (si += 4) {
             const seeds = genSeedSaltedSimd4(si, cfg.seed_salt);
             inline for (0..4) |lane| {
-                processSeedFast(cfg, seeds[lane], &gen, &spawns, &biomes, &structure_vectors);
+                processSeedFast(cfg, seeds[lane], &gen, &samplers, &spawns, &biomes, &structure_vectors);
             }
         }
         while (si < cfg.seed_end) : (si += 1) {
             const seed = genSeedSalted(si, cfg.seed_salt);
-            processSeedFast(cfg, seed, &gen, &spawns, &biomes, &structure_vectors);
+            processSeedFast(cfg, seed, &gen, &samplers, &spawns, &biomes, &structure_vectors);
         }
     }
 
