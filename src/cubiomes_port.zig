@@ -1,5 +1,6 @@
 // Note: stderr is not available in pure Zig builds. Error logging is disabled.
 pub const stderr: ?*anyopaque = null;
+const biome_tree = @import("biome_tree.zig");
 
 pub const __builtin_bswap16 = @import("std").zig.c_builtins.__builtin_bswap16;
 pub const __builtin_bswap32 = @import("std").zig.c_builtins.__builtin_bswap32;
@@ -9223,12 +9224,12 @@ pub export fn climateToBiome(arg_mc: c_int, np: [*c]const u64, arg_dat: [*c]u64)
     if (dat != null) {
         var alt: c_int = @as(c_int, @bitCast(@as(c_uint, @truncate(dat.*))));
         _ = &alt;
-        var ds: u64 = get_np_dist(np, bt, alt);
+        var ds: u64 = biome_tree.getNpDist(np, bt.*.param, bt.*.nodes, alt);
         _ = &ds;
-        idx = get_resulting_node(np, bt, @as(c_int, 0), alt, ds, @as(c_int, 0));
+        idx = biome_tree.getResultingNode(np, bt.*.steps, bt.*.param, bt.*.nodes, bt.*.len, bt.*.order, @as(c_int, 0), alt, ds, @as(c_int, 0));
         dat.* = @as(u64, @bitCast(@as(c_long, idx)));
     } else {
-        idx = get_resulting_node(np, bt, @as(c_int, 0), @as(c_int, 0), @as(u64, @bitCast(@as(c_long, -@as(c_int, 1)))), @as(c_int, 0));
+        idx = biome_tree.getResultingNode(np, bt.*.steps, bt.*.param, bt.*.nodes, bt.*.len, bt.*.order, @as(c_int, 0), @as(c_int, 0), @as(u64, @bitCast(@as(c_long, -@as(c_int, 1)))), @as(c_int, 0));
     }
     return @as(c_int, @bitCast(@as(c_uint, @truncate(((blk: {
         const tmp = idx;
