@@ -35,6 +35,7 @@ pub const buildBiomeCompareReqs = search_eval.buildBiomeCompareReqs;
 pub const runNativeComparePass = search_eval.runNativeComparePass;
 pub const buildStructureRegionsForAnchor = search_eval.buildStructureRegionsForAnchor;
 pub const buildBiomeOffsets = search_eval.buildBiomeOffsets;
+pub const buildBiomeOffsetsStrided = search_eval.buildBiomeOffsetsStrided;
 pub const buildBiomePointsForAnchor = search_eval.buildBiomePointsForAnchor;
 pub const scanBiomeWithinRadius = search_eval.scanBiomeWithinRadius;
 pub const scanBiomePoints = search_eval.scanBiomePoints;
@@ -356,6 +357,8 @@ pub fn freeConstraints(allocator: std.mem.Allocator, constraints: []Constraint) 
                 allocator.free(v.key);
                 allocator.free(v.label);
                 allocator.free(v.offsets);
+                allocator.free(v.coarse_offsets_2);
+                allocator.free(v.coarse_offsets_4);
                 allocator.free(v.points);
             },
             .structure => |v| {
@@ -501,6 +504,8 @@ pub fn main() !void {
                 .min_count = parsed.min_count,
                 .radius2 = @as(i64, parsed.radius) * parsed.radius,
                 .offsets = try buildBiomeOffsets(allocator, parsed.radius),
+                .coarse_offsets_2 = try buildBiomeOffsetsStrided(allocator, parsed.radius, 2),
+                .coarse_offsets_4 = try buildBiomeOffsetsStrided(allocator, parsed.radius, 4),
                 .points = &.{},
             } });
             try biome_constraint_ids.append(constraints.items.len - 1);

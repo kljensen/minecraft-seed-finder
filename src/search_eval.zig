@@ -660,7 +660,12 @@ pub fn buildStructureRegionsForAnchor(
 }
 
 pub fn buildBiomeOffsets(allocator: std.mem.Allocator, radius: i32) ![]BiomeOffset {
-    const step: i32 = 4;
+    return buildBiomeOffsetsStrided(allocator, radius, 1);
+}
+
+pub fn buildBiomeOffsetsStrided(allocator: std.mem.Allocator, radius: i32, stride: i32) ![]BiomeOffset {
+    if (stride <= 0) return error.InvalidStride;
+    const step: i32 = 4 * stride;
     const r2: i64 = @as(i64, radius) * radius;
     var out = std.ArrayList(BiomeOffset).init(allocator);
     errdefer out.deinit();
@@ -675,6 +680,12 @@ pub fn buildBiomeOffsets(allocator: std.mem.Allocator, radius: i32) ![]BiomeOffs
         }
     }
     return out.toOwnedSlice();
+}
+
+fn selectBiomeMatchStride(min_count: i32) i32 {
+    if (min_count >= 16) return 4;
+    if (min_count >= 4) return 2;
+    return 1;
 }
 
 pub fn buildBiomePointsForAnchor(allocator: std.mem.Allocator, center: c.Pos, offsets: []const BiomeOffset) ![]BiomePoint {
@@ -1035,8 +1046,15 @@ pub fn evalConstraintAt(
             } else {
                 const matched = if (req.points.len > 0)
                     biomeMatchesPointsWithBounds(g, req.biome_id, req.min_count, req.points, req.climate_bounds)
-                else
-                    biomeMatchesWithinRadiusWithBounds(g, anchor, req.biome_id, req.min_count, req.offsets, req.climate_bounds);
+                else blk: {
+                    const stride = selectBiomeMatchStride(req.min_count);
+                    const offsets = switch (stride) {
+                        4 => if (req.coarse_offsets_4.len > 0) req.coarse_offsets_4 else req.offsets,
+                        2 => if (req.coarse_offsets_2.len > 0) req.coarse_offsets_2 else req.offsets,
+                        else => req.offsets,
+                    };
+                    break :blk biomeMatchesWithinRadiusWithBounds(g, anchor, req.biome_id, req.min_count, offsets, req.climate_bounds);
+                };
                 evals[idx].matched = matched;
                 evals[idx].count = if (matched) req.min_count else 0;
                 evals[idx].best_dist2 = std.math.maxInt(i64);
