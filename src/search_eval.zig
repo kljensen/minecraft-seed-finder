@@ -18,6 +18,7 @@ pub const BiomeCompareReq = types.BiomeCompareReq;
 pub const NativeShadow = types.NativeShadow;
 pub const NativeBackend = types.NativeBackend;
 pub const ExprNode = expr.ExprNode;
+const max_biome_climate_leaves = types.max_biome_climate_leaves;
 
 const BiomeScanResult = struct {
     best_dist2: i64,
@@ -54,29 +55,40 @@ pub fn precomputeBiomeClimateBounds(mc: i32, biome_id: i32) ?BiomeClimateBounds 
     var out = BiomeClimateBounds{
         .ranges = undefined,
         .valid = false,
+        .leaves = undefined,
+        .leaf_count = 0,
+        .leaf_overflow = false,
     };
 
     for (tree.nodes) |node| {
         const node_biome: u8 = @truncate((node >> 48) & 0xff);
         if (node_biome != biome_u8) continue;
 
-        if (!out.valid) {
-            for (0..6) |dim| {
-                const shift: u6 = @intCast(dim * 8);
-                const param_idx: usize = @intCast((node >> shift) & 0xff);
-                const p = tree.params[param_idx];
-                out.ranges[dim] = .{ .lo = p[0], .hi = p[1] };
-            }
-            out.valid = true;
-            continue;
-        }
-
+        var leaf: [6]ClimateRange = undefined;
         for (0..6) |dim| {
             const shift: u6 = @intCast(dim * 8);
             const param_idx: usize = @intCast((node >> shift) & 0xff);
             const p = tree.params[param_idx];
-            out.ranges[dim].lo = @min(out.ranges[dim].lo, p[0]);
-            out.ranges[dim].hi = @max(out.ranges[dim].hi, p[1]);
+            leaf[dim] = .{ .lo = p[0], .hi = p[1] };
+        }
+
+        if (!out.valid) {
+            out.ranges = leaf;
+            out.valid = true;
+        } else {
+            for (0..6) |dim| {
+                out.ranges[dim].lo = @min(out.ranges[dim].lo, leaf[dim].lo);
+                out.ranges[dim].hi = @max(out.ranges[dim].hi, leaf[dim].hi);
+            }
+        }
+
+        if (!out.leaf_overflow) {
+            if (out.leaf_count < max_biome_climate_leaves) {
+                out.leaves[out.leaf_count] = leaf;
+                out.leaf_count += 1;
+            } else {
+                out.leaf_overflow = true;
+            }
         }
     }
     if (!out.valid) return null;
@@ -89,6 +101,26 @@ inline fn npBit(dim: usize) u6 {
 
 fn isBiomeFeasible(bounds: BiomeClimateBounds, np_values: [6]i64, np_known: u6) bool {
     if (!bounds.valid) return true;
+    if (!bounds.leaf_overflow and bounds.leaf_count > 0) {
+        var leaf_i: usize = 0;
+        while (leaf_i < bounds.leaf_count) : (leaf_i += 1) {
+            const leaf = bounds.leaves[leaf_i];
+            var matches = true;
+            for (0..6) |dim| {
+                const bit = npBit(dim);
+                if ((np_known & bit) == 0) continue;
+                const v = np_values[dim];
+                const lo = @as(i64, leaf[dim].lo);
+                const hi = @as(i64, leaf[dim].hi);
+                if (v < lo or v > hi) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) return true;
+        }
+        return false;
+    }
     for (0..6) |dim| {
         const bit = npBit(dim);
         if ((np_known & bit) == 0) continue;
@@ -104,6 +136,8 @@ fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: BiomeClim
     const bn = &g.unnamed_0.unnamed_1.bn;
     var np: [6]i64 = undefined;
     var np_known: u6 = 0;
+    const c_idx = @as(usize, @intCast(c.NP_CONTINENTALNESS));
+    const e_idx = @as(usize, @intCast(c.NP_EROSION));
 
     var sx: c_int = undefined;
     var sy: c_int = undefined;
@@ -116,14 +150,14 @@ fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: BiomeClim
     px += c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_SHIFT))], @as(f64, @floatFromInt(sx)), 0.0, @as(f64, @floatFromInt(sz))) * 4.0;
     pz += c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_SHIFT))], @as(f64, @floatFromInt(sz)), @as(f64, @floatFromInt(sx)), 0.0) * 4.0;
 
-    const c_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_CONTINENTALNESS))], px, 0.0, pz)));
-    np[@as(usize, @intCast(c.NP_CONTINENTALNESS))] = @as(i64, @intFromFloat(10000.0 * c_val));
-    np_known |= npBit(@as(usize, @intCast(c.NP_CONTINENTALNESS)));
+    const c_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[c_idx], px, 0.0, pz)));
+    np[c_idx] = @as(i64, @intFromFloat(10000.0 * c_val));
+    np_known |= npBit(c_idx);
     if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
 
-    const e_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_EROSION))], px, 0.0, pz)));
-    np[@as(usize, @intCast(c.NP_EROSION))] = @as(i64, @intFromFloat(10000.0 * e_val));
-    np_known |= npBit(@as(usize, @intCast(c.NP_EROSION)));
+    const e_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[e_idx], px, 0.0, pz)));
+    np[e_idx] = @as(i64, @intFromFloat(10000.0 * e_val));
+    np_known |= npBit(e_idx);
     if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
 
     const w_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_WEIRDNESS))], px, 0.0, pz)));
@@ -154,13 +188,18 @@ fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: BiomeClim
     return c.climateToBiome(bn.mc, @ptrCast(@alignCast(&np)), null);
 }
 
+fn canUseFastBiomePath(g: *const c.Generator) bool {
+    if (!biome_climate_early_exit_enabled) return false;
+    if (g.mc < c.MC_1_18) return false;
+    if (g.dim != c.DIM_OVERWORLD) return false;
+    if (g.unnamed_0.unnamed_1.bn.nptype != -1) return false;
+    return true;
+}
+
 fn maybeFastBiomeId(g: *c.Generator, x: i32, z: i32, climate_bounds: ?BiomeClimateBounds) ?i32 {
-    if (!biome_climate_early_exit_enabled) return null;
+    if (!canUseFastBiomePath(g)) return null;
     const bounds = climate_bounds orelse return null;
     if (!bounds.valid) return null;
-    if (g.mc < c.MC_1_18) return null;
-    if (g.dim != c.DIM_OVERWORLD) return null;
-    if (g.unnamed_0.unnamed_1.bn.nptype != -1) return null;
     return fastBiomeIdWithFeasibility(g, x, z, bounds);
 }
 
@@ -1005,6 +1044,182 @@ pub fn anyStructureWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.P
     return false;
 }
 
+const MAX_COMBINED_BIOMES = 8;
+const MAX_BIOME_CACHE_POINTS: usize = 65536;
+
+/// Cached sequential biome threshold: evaluates biome constraints sequentially
+/// (preserving short-circuit) but caches biome_ids so subsequent biome scans
+/// reuse noise computation from earlier scans. Each scan uses per-biome climate
+/// bounds for strong early-exit. Returns null to signal fallback to sequential.
+fn combinedBiomeThreshold(
+    g: *c.Generator,
+    anchor: c.Pos,
+    constraints: []const Constraint,
+    aliases: []const usize,
+    biome_atom_indices: []const usize,
+    evals: []EvalState,
+    eval_epoch: u64,
+) ?bool {
+    const n_atoms = biome_atom_indices.len;
+
+    // Collect unique biome reqs, dedup by alias
+    var biome_reqs: [MAX_COMBINED_BIOMES]*const BiomeReq = undefined;
+    var biome_eval_indices: [MAX_COMBINED_BIOMES]usize = undefined;
+    var n: usize = 0;
+    var max_radius_idx: usize = 0;
+    var max_radius2: i64 = 0;
+
+    for (biome_atom_indices) |idx| {
+        const alias_idx = aliases[idx];
+        var already = false;
+        for (0..n) |j| {
+            if (biome_eval_indices[j] == alias_idx) {
+                already = true;
+                break;
+            }
+        }
+        if (already) continue;
+
+        const req = &constraints[alias_idx].biome;
+        biome_reqs[n] = req;
+        biome_eval_indices[n] = alias_idx;
+        if (req.radius2 > max_radius2) {
+            max_radius2 = req.radius2;
+            max_radius_idx = n;
+        }
+        n += 1;
+    }
+
+    if (n < 2) return null; // fallback to sequential
+
+    const max_req = biome_reqs[max_radius_idx];
+    const use_points = max_req.points.len > 0;
+    const use_fast = canUseFastBiomePath(g);
+
+    // Determine iteration list size
+    const total_points = if (use_points) max_req.points.len else blk: {
+        var min_stride: i32 = 4;
+        for (0..n) |i| {
+            const s = selectBiomeMatchStride(biome_reqs[i].min_count);
+            if (s < min_stride) min_stride = s;
+        }
+        const offsets = switch (min_stride) {
+            4 => if (max_req.coarse_offsets_4.len > 0) max_req.coarse_offsets_4 else max_req.offsets,
+            2 => if (max_req.coarse_offsets_2.len > 0) max_req.coarse_offsets_2 else max_req.offsets,
+            else => max_req.offsets,
+        };
+        break :blk offsets.len;
+    };
+
+    if (total_points > MAX_BIOME_CACHE_POINTS or total_points == 0) return null;
+    if (!use_fast) return null; // cache only helps with fast path (climate early-exit)
+
+    const biome_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
+
+    // Biome ID cache: c.none = not yet computed
+    var biome_cache = [_]i32{c.none} ** MAX_BIOME_CACHE_POINTS;
+
+    // Get iteration list for offsets path
+    var min_stride: i32 = 4;
+    for (0..n) |i| {
+        const s = selectBiomeMatchStride(biome_reqs[i].min_count);
+        if (s < min_stride) min_stride = s;
+    }
+    const iter_offsets = if (!use_points) switch (min_stride) {
+        4 => if (max_req.coarse_offsets_4.len > 0) max_req.coarse_offsets_4 else max_req.offsets,
+        2 => if (max_req.coarse_offsets_2.len > 0) max_req.coarse_offsets_2 else max_req.offsets,
+        else => max_req.offsets,
+    } else max_req.offsets; // unused in points path
+
+    // Sequential evaluation with caching: preserves short-circuit
+    var all_matched = true;
+    for (0..n) |phase| {
+        const req = biome_reqs[phase];
+        const bounds = req.climate_bounds;
+        const has_valid_bounds = if (bounds) |b| b.valid else false;
+        var count: i32 = 0;
+        var matched = false;
+
+        if (use_points) {
+            for (max_req.points, 0..) |pt, pi| {
+                var biome_id = biome_cache[pi];
+                if (biome_id == c.none) {
+                    // Not cached: compute with this biome's bounds
+                    biome_id = if (has_valid_bounds)
+                        fastBiomeIdWithFeasibility(g, pt.x, pt.z, bounds.?)
+                    else
+                        c.getBiomeAt(g, 1, pt.x, 0, pt.z);
+                    biome_cache[pi] = biome_id;
+                }
+                if (biome_id == c.none) continue;
+                if (biome_id == req.biome_id and pt.dist2 <= req.radius2) {
+                    count += 1;
+                    if (count >= req.min_count) {
+                        matched = true;
+                        break;
+                    }
+                }
+                const remaining = total_points - pi - 1;
+                if (count + @as(i32, @intCast(remaining)) < req.min_count) break;
+            }
+        } else {
+            for (iter_offsets, 0..) |off, oi| {
+                const x = anchor.x + off.dx;
+                const z = anchor.z + off.dz;
+                var biome_id = biome_cache[oi];
+                if (biome_id == c.none) {
+                    biome_id = if (has_valid_bounds)
+                        fastBiomeIdWithFeasibility(g, x, z, bounds.?)
+                    else
+                        c.getBiomeAt(g, 1, x, 0, z);
+                    biome_cache[oi] = biome_id;
+                }
+                if (biome_id == c.none) continue;
+                if (biome_id == req.biome_id and off.dist2 <= req.radius2) {
+                    count += 1;
+                    if (count >= req.min_count) {
+                        matched = true;
+                        break;
+                    }
+                }
+                const remaining = total_points - oi - 1;
+                if (count + @as(i32, @intCast(remaining)) < req.min_count) break;
+            }
+        }
+
+        // Record eval for this biome
+        evals[biome_eval_indices[phase]] = .{
+            .epoch = eval_epoch,
+            .computed = true,
+            .finalized = false,
+            .matched = matched,
+            .count = if (matched) req.min_count else 0,
+            .best_dist2 = std.math.maxInt(i64),
+        };
+
+        if (!matched) {
+            all_matched = false;
+            break; // Short-circuit: this biome failed, skip remaining
+        }
+    }
+
+    // Propagate aliases
+    for (0..n_atoms) |ai| {
+        const idx = biome_atom_indices[ai];
+        const alias_idx = aliases[idx];
+        if (alias_idx != idx and evals[alias_idx].epoch == eval_epoch and evals[alias_idx].computed) {
+            evals[idx] = evals[alias_idx];
+        }
+    }
+
+    if (active_eval_telemetry) |telemetry| {
+        telemetry.biome_constraint_evals +%= @as(u64, @intCast(n));
+        telemetry.biome_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - biome_start));
+    }
+
+    return all_matched;
+}
+
 pub fn evalConstraintAt(
     constraints: []const Constraint,
     aliases: []const usize,
@@ -1126,7 +1341,48 @@ pub fn evalConjunctiveAtoms(
     mc: i32,
     anchor: c.Pos,
 ) bool {
+    // Count biome atoms and collect their indices
+    var biome_atom_buf: [MAX_COMBINED_BIOMES]usize = undefined;
+    var num_biome_atoms: usize = 0;
+    var overflow = false;
+
     for (atom_indices) |idx| {
+        const alias_idx = aliases[idx];
+        switch (constraints[alias_idx]) {
+            .biome => {
+                if (num_biome_atoms < MAX_COMBINED_BIOMES) {
+                    biome_atom_buf[num_biome_atoms] = idx;
+                    num_biome_atoms += 1;
+                } else {
+                    overflow = true;
+                }
+            },
+            .structure => {},
+        }
+    }
+
+    // Fall back to sequential if < 2 biome atoms or overflow
+    if (num_biome_atoms < 2 or overflow) {
+        for (atom_indices) |idx| {
+            if (!evalConstraintAt(constraints, aliases, idx, evals, eval_epoch, g, seed, mc, anchor, .threshold)) return false;
+        }
+        return true;
+    }
+
+    // Evaluate non-biome atoms first (structures are cheap)
+    for (atom_indices) |idx| {
+        const alias_idx = aliases[idx];
+        if (constraints[alias_idx] == .biome) continue;
+        if (!evalConstraintAt(constraints, aliases, idx, evals, eval_epoch, g, seed, mc, anchor, .threshold)) return false;
+    }
+
+    // Cached sequential biome scan (falls back to sequential if conditions unmet)
+    if (combinedBiomeThreshold(g, anchor, constraints, aliases, biome_atom_buf[0..num_biome_atoms], evals, eval_epoch)) |result| {
+        return result;
+    }
+
+    // Fallback: evaluate biome atoms sequentially
+    for (biome_atom_buf[0..num_biome_atoms]) |idx| {
         if (!evalConstraintAt(constraints, aliases, idx, evals, eval_epoch, g, seed, mc, anchor, .threshold)) return false;
     }
     return true;

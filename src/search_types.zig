@@ -19,9 +19,14 @@ pub const ClimateRange = struct {
     hi: i32,
 };
 
+pub const max_biome_climate_leaves: usize = 64;
+
 pub const BiomeClimateBounds = struct {
     ranges: [6]ClimateRange,
     valid: bool = false,
+    leaves: [max_biome_climate_leaves][6]ClimateRange = undefined,
+    leaf_count: u16 = 0,
+    leaf_overflow: bool = false,
 };
 
 pub const StructureRegion = struct {
