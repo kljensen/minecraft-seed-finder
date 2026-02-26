@@ -314,6 +314,7 @@ fn printUsage(writer: anytype) !void {
             "  --perf-eval-detail <label>           Record detailed biome/structure eval telemetry into tmp/perf\n" ++
             "  --list-biomes                        List accepted biome names\n" ++
             "  --list-structures                    List accepted structure names\n" ++
+            "  --threads <N|auto>                   Worker threads (default: 0 = single-threaded)\n" ++
             "  --output <path>                      Optional output file\n" ++
             "  --experimental-native-shadow         Run native Zig noise in shadow mode (no filtering impact)\n" ++
             "  --experimental-native-shadow-max-mismatch-rate <f64>\n" ++
@@ -370,6 +371,188 @@ pub fn freeConstraints(allocator: std.mem.Allocator, constraints: []Constraint) 
     }
 }
 
+const BATCH_SIZE: u64 = 4096;
+
+const SharedContext = struct {
+    // Read-only (set before workers start)
+    constraints: []const Constraint,
+    parser_or_nodes: []const ExprNode,
+    expr_root: usize,
+    aliases: []const usize,
+    conjunctive_eval_atoms: ?[]const usize,
+    expr_is_literal_true: bool,
+    mc: i32,
+    anchor_override: ?c.Pos,
+    lazy_spawn: bool,
+    output_format: OutputFormat,
+    count: usize,
+    ranked: bool,
+    top_k: usize,
+    max_seed: u64,
+    random_mode: bool,
+    random_samples: u64,
+
+    // Atomic mutable
+    next_seed: u64,
+    found_count: u64,
+    tested_count: u64,
+    cancel_flag: u8, // 0 = running, 1 = cancel
+    samples_claimed: u64,
+
+    // Mutex-guarded
+    output_mutex: std.Thread.Mutex,
+    output_file: std.fs.File,
+    error_mutex: std.Thread.Mutex,
+    first_error: ?anyerror,
+};
+
+const ThreadContext = struct {
+    gen: *c.Generator,
+    evals: []EvalState,
+    eval_epoch: u64,
+    local_tested: u64,
+    local_found: usize,
+    local_top: std.ArrayList(MatchCandidate),
+    thread_id: usize,
+    rng_state: u64,
+};
+
+fn reportError(shared: *SharedContext, e: anyerror) void {
+    shared.error_mutex.lock();
+    defer shared.error_mutex.unlock();
+    if (shared.first_error == null) shared.first_error = e;
+    @atomicStore(u8, &shared.cancel_flag, @as(u8, 1), .release);
+}
+
+fn workerLoop(ctx: *ThreadContext, shared: *SharedContext) void {
+    const c_alloc = std.heap.c_allocator;
+
+    batch_loop: while (true) {
+        if (@atomicLoad(u8, &shared.cancel_flag, .acquire) != 0) break;
+        if (!shared.ranked) {
+            if (@atomicLoad(u64, &shared.found_count, .monotonic) >= shared.count) break;
+        }
+
+        // Claim next batch via CAS with saturating add (no u64 wrapping)
+        var batch_base: u64 = undefined;
+        var seed_count: u64 = undefined;
+        if (shared.random_mode) {
+            batch_base = while (true) {
+                const cur = @atomicLoad(u64, &shared.samples_claimed, .monotonic);
+                if (cur >= shared.random_samples) break :batch_loop;
+                if (@cmpxchgWeak(u64, &shared.samples_claimed, cur, cur +| BATCH_SIZE, .monotonic, .monotonic) == null)
+                    break cur;
+            };
+            seed_count = @min(BATCH_SIZE, shared.random_samples - batch_base);
+        } else {
+            batch_base = while (true) {
+                const cur = @atomicLoad(u64, &shared.next_seed, .monotonic);
+                if (cur > shared.max_seed) break :batch_loop;
+                if (@cmpxchgWeak(u64, &shared.next_seed, cur, cur +| BATCH_SIZE, .monotonic, .monotonic) == null)
+                    break cur;
+            };
+            const batch_end = @min(shared.max_seed, batch_base +| (BATCH_SIZE - 1));
+            seed_count = batch_end - batch_base + 1;
+        }
+
+        var batch_tested: u64 = 0;
+        var i: u64 = 0;
+        while (i < seed_count) : (i += 1) {
+            // Periodic early exit check within batch (non-ranked mode)
+            if (!shared.ranked and (i & 63) == 0 and i > 0) {
+                if (@atomicLoad(u64, &shared.found_count, .monotonic) >= shared.count) break;
+                if (@atomicLoad(u8, &shared.cancel_flag, .acquire) != 0) break;
+            }
+
+            var seed: u64 = undefined;
+            if (shared.random_mode) {
+                seed = splitMix64(&ctx.rng_state);
+            } else {
+                seed = batch_base +% i;
+            }
+
+            ctx.eval_epoch +%= 1;
+            if (ctx.eval_epoch == 0) {
+                if (ctx.evals.len != 0) @memset(ctx.evals, .{});
+                ctx.eval_epoch = 1;
+            }
+
+            c.applySeed(ctx.gen, c.DIM_OVERWORLD, seed);
+
+            var spawn: ?c.Pos = null;
+            const anchor = if (shared.anchor_override) |fixed| blk: {
+                if (!shared.lazy_spawn) {
+                    spawn = c.getSpawn(ctx.gen);
+                }
+                break :blk fixed;
+            } else blk: {
+                const computed_spawn = c.getSpawn(ctx.gen);
+                spawn = computed_spawn;
+                break :blk computed_spawn;
+            };
+
+            const matches_expr = if (shared.expr_is_literal_true)
+                true
+            else if (shared.conjunctive_eval_atoms) |atoms|
+                evalConjunctiveAtoms(atoms, shared.constraints, shared.aliases, ctx.evals, ctx.eval_epoch, ctx.gen, seed, shared.mc, anchor)
+            else
+                evalExpr(shared.parser_or_nodes, shared.expr_root, shared.constraints, shared.aliases, ctx.evals, ctx.eval_epoch, ctx.gen, seed, shared.mc, anchor);
+
+            batch_tested += 1;
+
+            if (matches_expr) {
+                if (shared.lazy_spawn and spawn == null) {
+                    spawn = c.getSpawn(ctx.gen);
+                }
+
+                evaluateAll(shared.constraints, shared.aliases, ctx.evals, ctx.eval_epoch, ctx.gen, seed, shared.mc, anchor);
+                const summary = summarize(shared.constraints, ctx.evals);
+                const diagnostics = diagnosticsString(c_alloc, shared.constraints, ctx.evals) catch |e| {
+                    reportError(shared, e);
+                    return;
+                };
+
+                const candidate = MatchCandidate{
+                    .seed = seed,
+                    .spawn = spawn.?,
+                    .anchor = anchor,
+                    .score = summary.score,
+                    .matched_constraints = summary.matched,
+                    .total_constraints = shared.constraints.len,
+                    .diagnostics = diagnostics,
+                };
+
+                if (shared.ranked) {
+                    keepTopK(&ctx.local_top, candidate, shared.top_k, c_alloc) catch |e| {
+                        reportError(shared, e);
+                        return;
+                    };
+                } else {
+                    const slot = @atomicRmw(u64, &shared.found_count, .Add, @as(u64, 1), .monotonic);
+                    if (slot < shared.count) {
+                        {
+                            shared.output_mutex.lock();
+                            defer shared.output_mutex.unlock();
+                            emitResult(shared.output_file.writer(), shared.output_format, candidate) catch |e| {
+                                c_alloc.free(candidate.diagnostics);
+                                reportError(shared, e);
+                                return;
+                            };
+                        }
+                        c_alloc.free(candidate.diagnostics);
+                        ctx.local_found += 1;
+                    } else {
+                        c_alloc.free(candidate.diagnostics);
+                    }
+                }
+            }
+        }
+
+        _ = @atomicRmw(u64, &shared.tested_count, .Add, batch_tested, .monotonic);
+        ctx.local_tested += batch_tested;
+    }
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -413,6 +596,7 @@ pub fn main() !void {
     var native_shadow = NativeShadow{};
     var native_shadow_max_mismatch_rate: ?f64 = null;
     var native_backend = NativeBackend{};
+    var num_threads: usize = 0;
     var perf_breakdown_label: ?[]const u8 = null;
     var perf_eval_detail_label: ?[]const u8 = null;
 
@@ -485,6 +669,13 @@ pub fn main() !void {
             native_backend.compare_only = true;
         } else if (std.mem.eql(u8, arg, "--experimental-native-backend-strict")) {
             native_backend.strict = true;
+        } else if (std.mem.eql(u8, arg, "--threads")) {
+            const s = args.next() orelse return error.InvalidArguments;
+            if (std.mem.eql(u8, s, "auto")) {
+                num_threads = std.Thread.getCpuCount() catch 1;
+            } else {
+                num_threads = try std.fmt.parseInt(usize, s, 10);
+            }
         } else if (std.mem.eql(u8, arg, "--require-biome")) {
             const spec = args.next() orelse return error.InvalidArguments;
             const parsed = parseNameRadius(spec) orelse return error.InvalidArguments;
@@ -550,6 +741,33 @@ pub fn main() !void {
     if (random_mode and do_resume) return error.InvalidArguments;
     if (!random_mode and start_seed > max_seed) return error.InvalidArguments;
     if (!random_mode and ranked and max_seed == std.math.maxInt(u64)) return error.InvalidArguments;
+
+    if (num_threads > 0) {
+        if (perf_breakdown_label != null) {
+            std.debug.print("error: --perf-breakdown is incompatible with --threads > 0\n", .{});
+            return error.InvalidArguments;
+        }
+        if (perf_eval_detail_label != null) {
+            std.debug.print("error: --perf-eval-detail is incompatible with --threads > 0\n", .{});
+            return error.InvalidArguments;
+        }
+        if (native_shadow.enabled) {
+            std.debug.print("error: --experimental-native-shadow is incompatible with --threads > 0\n", .{});
+            return error.InvalidArguments;
+        }
+        if (native_backend.compare_only) {
+            std.debug.print("error: --experimental-native-backend-compare-only is incompatible with --threads > 0\n", .{});
+            return error.InvalidArguments;
+        }
+        if (checkpoint_path != null and !do_resume) {
+            std.debug.print("error: --checkpoint without --resume is incompatible with --threads > 0\n", .{});
+            return error.InvalidArguments;
+        }
+        if (progress_every > 0) {
+            std.debug.print("warning: --progress-every is ignored with --threads > 0\n", .{});
+            progress_every = 0;
+        }
+    }
 
     var idx: usize = 0;
     while (idx < constraints.items.len) : (idx += 1) {
@@ -642,7 +860,8 @@ pub fn main() !void {
 
     var top = std.ArrayList(MatchCandidate).init(allocator);
     defer {
-        for (top.items) |item| allocator.free(item.diagnostics);
+        const diag_alloc = if (num_threads > 0) std.heap.c_allocator else allocator;
+        for (top.items) |item| diag_alloc.free(item.diagnostics);
         top.deinit();
     }
 
@@ -693,6 +912,8 @@ pub fn main() !void {
         biome_compare_reqs = try buildBiomeCompareReqs(allocator, constraints.items, aliases, biome_indices.items);
     }
 
+    if (num_threads == 0) {
+    // --- single-threaded path (unchanged) ---
     while (iteration < max_iterations and (!ranked and found < count or ranked)) : (iteration += 1) {
         if (random_mode) {
             seed = splitMix64(&rng_state);
@@ -824,6 +1045,110 @@ pub fn main() !void {
                 try writeCheckpoint(path, .{ .next_seed = seed + 1, .tested = tested, .found = found });
             }
         }
+    }
+    } else {
+    // --- multi-threaded path ---
+    const c_alloc = std.heap.c_allocator;
+    const output_file = if (out_file) |f| f else std.io.getStdOut();
+
+    var shared = SharedContext{
+        .constraints = constraints.items,
+        .parser_or_nodes = parser_or_nodes.items,
+        .expr_root = expr_root,
+        .aliases = aliases,
+        .conjunctive_eval_atoms = conjunctive_eval_atoms,
+        .expr_is_literal_true = expr_is_literal_true,
+        .mc = mc,
+        .anchor_override = anchor_override,
+        .lazy_spawn = lazy_spawn,
+        .output_format = output_format,
+        .count = count,
+        .ranked = ranked,
+        .top_k = top_k,
+        .max_seed = max_seed,
+        .random_mode = random_mode,
+        .random_samples = if (random_samples) |rs| rs else std.math.maxInt(u64),
+        .next_seed = seed,
+        .found_count = found,
+        .tested_count = tested,
+        .cancel_flag = 0,
+        .samples_claimed = 0,
+        .output_mutex = .{},
+        .output_file = output_file,
+        .error_mutex = .{},
+        .first_error = null,
+    };
+
+    const generators = try c_alloc.alloc(c.Generator, num_threads);
+    defer c_alloc.free(generators);
+
+    const thread_evals = try c_alloc.alloc([]EvalState, num_threads);
+    var thread_evals_inited: usize = 0;
+    defer {
+        for (thread_evals[0..thread_evals_inited]) |te| c_alloc.free(te);
+        c_alloc.free(thread_evals);
+    }
+
+    const thread_contexts = try c_alloc.alloc(ThreadContext, num_threads);
+    defer c_alloc.free(thread_contexts);
+
+    for (0..num_threads) |tid| {
+        c.setupGenerator(&generators[tid], mc, 0);
+        thread_evals[tid] = try c_alloc.alloc(EvalState, constraints.items.len);
+        thread_evals_inited = tid + 1;
+        @memset(thread_evals[tid], .{});
+        thread_contexts[tid] = .{
+            .gen = &generators[tid],
+            .evals = thread_evals[tid],
+            .eval_epoch = 1,
+            .local_tested = 0,
+            .local_found = 0,
+            .local_top = std.ArrayList(MatchCandidate).init(c_alloc),
+            .thread_id = tid,
+            .rng_state = rng_state ^ (@as(u64, tid) *% 0x9E3779B97F4A7C15),
+        };
+    }
+    defer {
+        for (thread_contexts[0..thread_evals_inited]) |*ctx| {
+            for (ctx.local_top.items) |item| c_alloc.free(item.diagnostics);
+            ctx.local_top.deinit();
+        }
+    }
+
+    const threads = try c_alloc.alloc(std.Thread, num_threads);
+    defer c_alloc.free(threads);
+
+    var threads_spawned: usize = 0;
+    errdefer {
+        // On spawn failure: cancel running threads and join them
+        @atomicStore(u8, &shared.cancel_flag, 1, .release);
+        for (threads[0..threads_spawned]) |t| t.join();
+    }
+    for (0..num_threads) |tid| {
+        threads[tid] = try std.Thread.spawn(.{}, workerLoop, .{ &thread_contexts[tid], &shared });
+        threads_spawned += 1;
+    }
+
+    for (threads) |t| t.join();
+
+    if (shared.first_error) |e| return e;
+
+    tested = @atomicLoad(u64, &shared.tested_count, .monotonic);
+
+    if (ranked) {
+        for (thread_contexts) |*ctx| {
+            for (ctx.local_top.items) |item| {
+                try keepTopK(&top, item, top_k, c_alloc);
+            }
+            ctx.local_top.clearRetainingCapacity();
+        }
+    } else {
+        found = @min(@atomicLoad(u64, &shared.found_count, .monotonic), count);
+    }
+
+    if (!random_mode) {
+        seed = @min(@atomicLoad(u64, &shared.next_seed, .monotonic), max_seed +| 1);
+    }
     }
 
     if (ranked) {
