@@ -21,7 +21,7 @@ towering nearby, a village and stronghold within walking distance:
 
 ```sh
 zig build run -Doptimize=ReleaseFast -- \
-  --random --count 3 \
+  --random --count 3 --threads auto \
   --require-biome "flower_forest:2@50" \
   --require-biome "meadow:2@80" \
   --require-biome "jagged_peaks:3@350" \
@@ -67,6 +67,7 @@ Operators: `and`, `or`, `not` (aliases `&&`, `||`, `!`). Parentheses for groupin
 --random-samples <N>                 number of random samples
 --ranked                             keep top results by score
 --top-k <N>                          how many to keep in ranked mode
+--threads <N|auto>                   parallel workers (default: 0 = single-threaded)
 ```
 
 ### Output
@@ -130,6 +131,21 @@ measurements used a hard biome+structure query (`flower_forest:5@500` +
 | 1.04x | Structure eval: region sorting by distance + constraint cost ordering |
 
 **Net result**: **84s → 18s** on a hard biome+structure query (4.5x).
+
+### Multi-threading
+
+Use `--threads auto` (or `--threads N`) for near-linear scaling:
+
+| Threads | Speedup |
+|---------|---------|
+| 1 (ST)  | 1.0x    |
+| 2       | 1.9x    |
+| 4       | 3.7x    |
+| 8       | 5.8x    |
+
+Each thread gets its own Generator and evaluation state — seeds are
+embarrassingly parallel. Incompatible with `--checkpoint` and
+`--perf-breakdown`/`--perf-eval-detail`.
 
 ### What didn't work
 
