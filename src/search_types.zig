@@ -34,6 +34,48 @@ pub const StructureRegion = struct {
     reg_z: i32,
 };
 
+pub const ClimateParam = enum {
+    continentalness,
+    erosion,
+    peaks_valleys,
+    weirdness,
+    temperature,
+    humidity,
+};
+
+pub const ClimateReq = struct {
+    key: []const u8,
+    label: []const u8,
+    param: ClimateParam,
+    min_val: ?f32,
+    max_val: ?f32,
+    radius: i32,
+    radius2: i64,
+    min_fraction: f32,
+    offsets: []BiomeOffset = &.{},
+    points: []BiomePoint = &.{},
+};
+
+pub const TerrainStat = enum {
+    mean_height,
+    min_height,
+    max_height,
+    height_range,
+    height_std,
+};
+
+pub const TerrainReq = struct {
+    key: []const u8,
+    label: []const u8,
+    stat: TerrainStat,
+    min_val: ?f32,
+    max_val: ?f32,
+    radius: i32,
+    radius2: i64,
+    offsets: []BiomeOffset = &.{},
+    points: []BiomePoint = &.{},
+};
+
 pub const BiomeReq = struct {
     key: []const u8,
     label: []const u8,
@@ -64,11 +106,15 @@ pub const StructureReq = struct {
 pub const Constraint = union(enum) {
     biome: BiomeReq,
     structure: StructureReq,
+    climate: ClimateReq,
+    terrain: TerrainReq,
 
     pub fn key(self: Constraint) []const u8 {
         return switch (self) {
             .biome => |v| v.key,
             .structure => |v| v.key,
+            .climate => |v| v.key,
+            .terrain => |v| v.key,
         };
     }
 
@@ -76,6 +122,8 @@ pub const Constraint = union(enum) {
         return switch (self) {
             .biome => |v| v.label,
             .structure => |v| v.label,
+            .climate => |v| v.label,
+            .terrain => |v| v.label,
         };
     }
 
@@ -83,6 +131,8 @@ pub const Constraint = union(enum) {
         return switch (self) {
             .biome => |v| v.radius,
             .structure => |v| v.radius,
+            .climate => |v| v.radius,
+            .terrain => |v| v.radius,
         };
     }
 };
@@ -94,6 +144,7 @@ pub const EvalState = struct {
     matched: bool = false,
     best_dist2: i64 = std.math.maxInt(i64),
     count: i32 = 0,
+    climate_mean: f32 = 0,
 };
 
 pub const EvalMode = enum {

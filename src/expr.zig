@@ -15,6 +15,8 @@ pub const ExprParser = struct {
     constraints_len: usize,
     biome_ids: []const usize,
     structure_ids: []const usize,
+    climate_ids: []const usize,
+    terrain_ids: []const usize,
     nodes: std.ArrayList(ExprNode),
 
     pub fn init(
@@ -23,6 +25,8 @@ pub const ExprParser = struct {
         constraints_len: usize,
         biome_ids: []const usize,
         structure_ids: []const usize,
+        climate_ids: []const usize,
+        terrain_ids: []const usize,
     ) ExprParser {
         return .{
             .allocator = allocator,
@@ -31,6 +35,8 @@ pub const ExprParser = struct {
             .constraints_len = constraints_len,
             .biome_ids = biome_ids,
             .structure_ids = structure_ids,
+            .climate_ids = climate_ids,
+            .terrain_ids = terrain_ids,
             .nodes = std.ArrayList(ExprNode).init(allocator),
         };
     }
@@ -113,20 +119,36 @@ pub const ExprParser = struct {
 
     fn resolveIdentifier(self: *ExprParser, ident: []const u8) ?usize {
         if (ident.len < 2) return null;
+
+        // Try "cl" prefix first (before "c") for climate constraints
+        if (ident.len >= 3 and ident[0] == 'c' and ident[1] == 'l') {
+            const ord = std.fmt.parseInt(usize, ident[2..], 10) catch return null;
+            if (ord == 0 or ord > self.climate_ids.len) return null;
+            return self.climate_ids[ord - 1];
+        }
+
         const ord = std.fmt.parseInt(usize, ident[1..], 10) catch return null;
         if (ord == 0) return null;
 
+        // "c" prefix: overall constraint index
         if (ident[0] == 'c') {
             if (ord > self.constraints_len) return null;
             return ord - 1;
         }
+        // "b" prefix: biome constraint index
         if (ident[0] == 'b') {
             if (ord > self.biome_ids.len) return null;
             return self.biome_ids[ord - 1];
         }
+        // "s" prefix: structure constraint index
         if (ident[0] == 's') {
             if (ord > self.structure_ids.len) return null;
             return self.structure_ids[ord - 1];
+        }
+        // "t" prefix: terrain constraint index
+        if (ident[0] == 't') {
+            if (ord > self.terrain_ids.len) return null;
+            return self.terrain_ids[ord - 1];
         }
         return null;
     }

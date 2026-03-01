@@ -16,8 +16,9 @@ Requires [Zig](https://ziglang.org/) 0.14.0+.
 zig build -Doptimize=ReleaseFast
 ```
 
-Find an alpine village — flower forest and meadow at spawn, jagged peaks
-towering nearby, a village and stronghold within walking distance:
+Find a flat valley below snowy peaks — level terrain at spawn, jagged peaks
+with exposed coal towering nearby, lush caves and a deep dark underneath,
+a village within walking distance:
 
 ```sh
 zig build run -Doptimize=ReleaseFast -- \
@@ -25,6 +26,9 @@ zig build run -Doptimize=ReleaseFast -- \
   --require-biome "flower_forest:2@50" \
   --require-biome "meadow:2@80" \
   --require-biome "jagged_peaks:3@350" \
+  --require-biome "lush_caves:1@800" \
+  --require-biome "deep_dark:1@800" \
+  --require-terrain "height_range:..5@50" \
   --require-structure "village:400"
 ```
 

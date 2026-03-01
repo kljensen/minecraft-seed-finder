@@ -15,6 +15,10 @@ pub const ClimateRange = types.ClimateRange;
 pub const BiomeClimateBounds = types.BiomeClimateBounds;
 pub const StructureRegion = types.StructureRegion;
 pub const BiomeCompareReq = types.BiomeCompareReq;
+pub const ClimateParam = types.ClimateParam;
+pub const ClimateReq = types.ClimateReq;
+pub const TerrainStat = types.TerrainStat;
+pub const TerrainReq = types.TerrainReq;
 pub const NativeShadow = types.NativeShadow;
 pub const NativeBackend = types.NativeBackend;
 pub const ExprNode = expr.ExprNode;
@@ -201,6 +205,163 @@ fn maybeFastBiomeId(g: *c.Generator, x: i32, z: i32, climate_bounds: ?BiomeClima
     const bounds = climate_bounds orelse return null;
     if (!bounds.valid) return null;
     return fastBiomeIdWithFeasibility(g, x, z, bounds);
+}
+
+/// Sample all 6 climate noise parameters at a biome-scale coordinate.
+/// Returns [T, H, C, E, depth, W] as raw floats (not scaled by 10000).
+/// Only valid for MC >= 1.18, DIM_OVERWORLD; returns null otherwise.
+pub fn sampleClimateParams(g: *c.Generator, x: i32, z: i32) ?[6]f32 {
+    if (g.mc < c.MC_1_18) return null;
+    if (g.dim != c.DIM_OVERWORLD) return null;
+    const bn = &g.unnamed_0.unnamed_1.bn;
+
+    var sx: c_int = undefined;
+    var sy: c_int = undefined;
+    var sz: c_int = undefined;
+    c.voronoiAccess3D(g.sha, x, 0, z, &sx, &sy, &sz);
+
+    var px = @as(f64, @floatFromInt(sx));
+    var pz = @as(f64, @floatFromInt(sz));
+
+    px += c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_SHIFT))], @as(f64, @floatFromInt(sx)), 0.0, @as(f64, @floatFromInt(sz))) * 4.0;
+    pz += c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_SHIFT))], @as(f64, @floatFromInt(sz)), @as(f64, @floatFromInt(sx)), 0.0) * 4.0;
+
+    const c_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_CONTINENTALNESS))], px, 0.0, pz)));
+    const e_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_EROSION))], px, 0.0, pz)));
+    const w_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_WEIRDNESS))], px, 0.0, pz)));
+
+    const np_param: [4]f32 = .{
+        c_val,
+        e_val,
+        -3.0 * (@abs(@abs(w_val) - 0.6666666865348816) - 0.3333333432674408),
+        w_val,
+    };
+    const off = @as(f64, @floatCast(c.getSpline(bn.sp, @constCast(@ptrCast(&np_param))) + 0.014999999664723873));
+    const d_val = @as(f32, @floatCast(((1.0 - (@as(f64, @floatFromInt(sy * 4)) / 128.0)) - (83.0 / 160.0)) + off));
+
+    const t_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_TEMPERATURE))], px, 0.0, pz)));
+    const h_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_HUMIDITY))], px, 0.0, pz)));
+
+    return .{ t_val, h_val, c_val, e_val, d_val, w_val };
+}
+
+fn extractClimateParam(np: [6]f32, param: ClimateParam) f32 {
+    return switch (param) {
+        .temperature => np[@as(usize, @intCast(c.NP_TEMPERATURE))],
+        .humidity => np[@as(usize, @intCast(c.NP_HUMIDITY))],
+        .continentalness => np[@as(usize, @intCast(c.NP_CONTINENTALNESS))],
+        .erosion => np[@as(usize, @intCast(c.NP_EROSION))],
+        .weirdness => np[@as(usize, @intCast(c.NP_WEIRDNESS))],
+        .peaks_valleys => blk: {
+            const w = np[@as(usize, @intCast(c.NP_WEIRDNESS))];
+            break :blk 1.0 - @abs(3.0 * @abs(w) - 2.0);
+        },
+    };
+}
+
+fn depthToHeight(d_val: f32) f32 {
+    return d_val * 10000.0 / 76.0;
+}
+
+pub fn evalClimateConstraint(
+    g: *c.Generator,
+    anchor: c.Pos,
+    req: ClimateReq,
+) struct { matched: bool, mean_val: f32, in_range_frac: f32 } {
+    const use_points = req.points.len > 0;
+    const total: usize = if (use_points) req.points.len else req.offsets.len;
+    if (total == 0) return .{ .matched = false, .mean_val = 0, .in_range_frac = 0 };
+
+    var sum: f64 = 0;
+    var in_range: usize = 0;
+    const min_needed = @as(usize, @intFromFloat(@ceil(@as(f64, @floatFromInt(total)) * req.min_fraction)));
+
+    var i: usize = 0;
+    while (i < total) : (i += 1) {
+        const x = if (use_points) req.points[i].x else anchor.x + req.offsets[i].dx;
+        const z = if (use_points) req.points[i].z else anchor.z + req.offsets[i].dz;
+
+        const np = sampleClimateParams(g, x, z) orelse return .{ .matched = false, .mean_val = 0, .in_range_frac = 0 };
+        const val = extractClimateParam(np, req.param);
+        sum += @as(f64, val);
+
+        const above_min = if (req.min_val) |lo| val >= lo else true;
+        const below_max = if (req.max_val) |hi| val <= hi else true;
+        if (above_min and below_max) in_range += 1;
+
+        // Early-fail: impossible to reach threshold
+        const remaining = total - i - 1;
+        if (in_range + remaining < min_needed) {
+            const sampled = i + 1;
+            return .{
+                .matched = false,
+                .mean_val = @as(f32, @floatCast(sum / @as(f64, @floatFromInt(sampled)))),
+                .in_range_frac = @as(f32, @floatFromInt(in_range)) / @as(f32, @floatFromInt(sampled)),
+            };
+        }
+    }
+
+    const mean = @as(f32, @floatCast(sum / @as(f64, @floatFromInt(total))));
+    const frac = @as(f32, @floatFromInt(in_range)) / @as(f32, @floatFromInt(total));
+    return .{ .matched = frac >= req.min_fraction, .mean_val = mean, .in_range_frac = frac };
+}
+
+pub fn evalTerrainConstraint(
+    g: *c.Generator,
+    anchor: c.Pos,
+    req: TerrainReq,
+) struct { matched: bool, stat_val: f32 } {
+    const use_points = req.points.len > 0;
+    const total: usize = if (use_points) req.points.len else req.offsets.len;
+    if (total == 0) return .{ .matched = false, .stat_val = 0 };
+
+    var sum: f64 = 0;
+    var sum_sq: f64 = 0;
+    var min_h: f32 = std.math.inf(f32);
+    var max_h: f32 = -std.math.inf(f32);
+
+    var i: usize = 0;
+    while (i < total) : (i += 1) {
+        const x = if (use_points) req.points[i].x else anchor.x + req.offsets[i].dx;
+        const z = if (use_points) req.points[i].z else anchor.z + req.offsets[i].dz;
+
+        const np = sampleClimateParams(g, x, z) orelse return .{ .matched = false, .stat_val = 0 };
+        const h = depthToHeight(np[@as(usize, @intCast(c.NP_DEPTH))]);
+        sum += @as(f64, h);
+        sum_sq += @as(f64, h) * @as(f64, h);
+        if (h < min_h) min_h = h;
+        if (h > max_h) max_h = h;
+
+        // Early-fail for min_height: any point below threshold fails immediately
+        if (req.stat == .min_height) {
+            if (req.min_val) |lo| {
+                if (h < lo) return .{ .matched = false, .stat_val = h };
+            }
+        }
+        // Early-fail for max_height with upper bound
+        if (req.stat == .max_height) {
+            if (req.max_val) |hi| {
+                if (h > hi) return .{ .matched = false, .stat_val = h };
+            }
+        }
+    }
+
+    const n = @as(f64, @floatFromInt(total));
+    const mean = @as(f32, @floatCast(sum / n));
+    const stat_val: f32 = switch (req.stat) {
+        .mean_height => mean,
+        .min_height => min_h,
+        .max_height => max_h,
+        .height_range => max_h - min_h,
+        .height_std => blk: {
+            const variance = (sum_sq / n) - (@as(f64, mean) * @as(f64, mean));
+            break :blk @as(f32, @floatCast(@sqrt(@max(0.0, variance))));
+        },
+    };
+
+    const above_min = if (req.min_val) |lo| stat_val >= lo else true;
+    const below_max = if (req.max_val) |hi| stat_val <= hi else true;
+    return .{ .matched = above_min and below_max, .stat_val = stat_val };
 }
 
 const CachedBiomeSampler = struct {
@@ -1301,6 +1462,22 @@ pub fn evalConstraintAt(
                 telemetry.structure_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - structure_start));
             }
         },
+        .climate => |req| {
+            const result = evalClimateConstraint(g, anchor, req);
+            evals[idx].matched = result.matched;
+            evals[idx].count = 0;
+            evals[idx].best_dist2 = 0;
+            evals[idx].finalized = true;
+            evals[idx].climate_mean = result.mean_val;
+        },
+        .terrain => |req| {
+            const result = evalTerrainConstraint(g, anchor, req);
+            evals[idx].matched = result.matched;
+            evals[idx].count = 0;
+            evals[idx].best_dist2 = 0;
+            evals[idx].finalized = true;
+            evals[idx].climate_mean = result.stat_val;
+        },
     }
     if (active_eval_telemetry) |telemetry| {
         telemetry.eval_total_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - total_start));
@@ -1357,7 +1534,7 @@ pub fn evalConjunctiveAtoms(
                     overflow = true;
                 }
             },
-            .structure => {},
+            .structure, .climate, .terrain => {},
         }
     }
 
@@ -1406,6 +1583,14 @@ fn estimateConstraintEvalCost(cst: Constraint) u64 {
             }
             break :blk 128;
         },
+        .climate => |req| blk: {
+            const n = if (req.points.len > 0) req.points.len else req.offsets.len;
+            break :blk @as(u64, @intCast(@max(@as(usize, 1), n)));
+        },
+        .terrain => |req| blk: {
+            const n = if (req.points.len > 0) req.points.len else req.offsets.len;
+            break :blk @as(u64, @intCast(@max(@as(usize, 1), n)));
+        },
     };
 }
 
@@ -1417,6 +1602,62 @@ pub fn reorderConjunctiveAtomsByEstimatedCost(atom_indices: []usize, constraints
             const cb = estimateConstraintEvalCost(ctx[b]);
             if (ca == cb) return a < b;
             return ca < cb;
+        }
+    }.lessThan);
+}
+
+const AdaptiveSortCtx = struct {
+    constraints: []const Constraint,
+    aliases: []const usize,
+    eval_counts: []const u64,
+    fail_counts: []const u64,
+};
+
+pub fn reorderConjunctiveAtomsByAdaptiveScore(
+    atom_indices: []usize,
+    constraints: []const Constraint,
+    aliases: []const usize,
+    eval_counts: []const u64,
+    fail_counts: []const u64,
+) void {
+    const ctx = AdaptiveSortCtx{
+        .constraints = constraints,
+        .aliases = aliases,
+        .eval_counts = eval_counts,
+        .fail_counts = fail_counts,
+    };
+    std.sort.heap(usize, atom_indices, ctx, struct {
+        fn lessThan(sort_ctx: AdaptiveSortCtx, a: usize, b: usize) bool {
+            const a_alias = sort_ctx.aliases[a];
+            const b_alias = sort_ctx.aliases[b];
+            const a_is_biome = sort_ctx.constraints[a_alias] == .biome;
+            const b_is_biome = sort_ctx.constraints[b_alias] == .biome;
+
+            // Non-biomes before biomes (matches evalConjunctiveAtoms semantics)
+            if (!a_is_biome and b_is_biome) return true;
+            if (a_is_biome and !b_is_biome) return false;
+
+            // Within same group: highest utility first (best rejectors)
+            const a_util = adaptiveUtility(sort_ctx, a);
+            const b_util = adaptiveUtility(sort_ctx, b);
+            if (a_util > b_util) return true;
+            if (b_util > a_util) return false;
+
+            // Tie-break: lower cost, then lower index
+            const a_cost = estimateConstraintEvalCost(sort_ctx.constraints[a_alias]);
+            const b_cost = estimateConstraintEvalCost(sort_ctx.constraints[b_alias]);
+            if (a_cost < b_cost) return true;
+            if (b_cost < a_cost) return false;
+            return a < b;
+        }
+
+        fn adaptiveUtility(sort_ctx: AdaptiveSortCtx, idx: usize) f64 {
+            const eval_count = sort_ctx.eval_counts[idx];
+            const fail_count = sort_ctx.fail_counts[idx];
+            // Bayesian smoothing: (fail+1)/(eval+2)
+            const p_reject = @as(f64, @floatFromInt(fail_count + 1)) / @as(f64, @floatFromInt(eval_count + 2));
+            const cost = @max(1.0, @as(f64, @floatFromInt(estimateConstraintEvalCost(sort_ctx.constraints[sort_ctx.aliases[idx]]))));
+            return p_reject / cost;
         }
     }.lessThan);
 }
@@ -1452,6 +1693,14 @@ fn constraintsEquivalent(a: Constraint, b: Constraint) bool {
             .structure => |y| x.structure == y.structure and x.radius == y.radius,
             else => false,
         },
+        .climate => |x| switch (b) {
+            .climate => |y| x.param == y.param and x.min_val == y.min_val and x.max_val == y.max_val and x.radius == y.radius and x.min_fraction == y.min_fraction,
+            else => false,
+        },
+        .terrain => |x| switch (b) {
+            .terrain => |y| x.stat == y.stat and x.min_val == y.min_val and x.max_val == y.max_val and x.radius == y.radius,
+            else => false,
+        },
     };
 }
 
@@ -1478,10 +1727,17 @@ pub fn summarize(constraints: []const Constraint, evals: []const EvalState) stru
         if (!evals[i].matched) continue;
         matched += 1;
 
-        const radius = @as(f64, @floatFromInt(cst.radius()));
-        const dist = std.math.sqrt(@as(f64, @floatFromInt(evals[i].best_dist2)));
-        const closeness = @max(0.0, 1.0 - (dist / radius));
-        score += 1.0 + closeness;
+        switch (cst) {
+            .climate, .terrain => {
+                score += 1.0;
+            },
+            else => {
+                const radius = @as(f64, @floatFromInt(cst.radius()));
+                const dist = std.math.sqrt(@as(f64, @floatFromInt(evals[i].best_dist2)));
+                const closeness = @max(0.0, 1.0 - (dist / radius));
+                score += 1.0 + closeness;
+            },
+        }
     }
 
     return .{ .matched = matched, .score = score };
@@ -1499,13 +1755,22 @@ pub fn diagnosticsString(allocator: std.mem.Allocator, constraints: []const Cons
             switch (cst) {
                 .biome => |req| try w.print("miss({d}/{d})", .{ evals[i].count, req.min_count }),
                 .structure => try w.writeAll("miss"),
+                .climate => try w.print("miss(mean={d:.3})", .{evals[i].climate_mean}),
+                .terrain => try w.print("miss(val={d:.2})", .{evals[i].climate_mean}),
             }
             continue;
         }
-        const dist = std.math.sqrt(@as(f64, @floatFromInt(evals[i].best_dist2)));
         switch (cst) {
-            .biome => try w.print("ok({d})@{d:.1}", .{ evals[i].count, dist }),
-            .structure => try w.print("ok@{d:.1}", .{dist}),
+            .biome => {
+                const dist = std.math.sqrt(@as(f64, @floatFromInt(evals[i].best_dist2)));
+                try w.print("ok({d})@{d:.1}", .{ evals[i].count, dist });
+            },
+            .structure => {
+                const dist = std.math.sqrt(@as(f64, @floatFromInt(evals[i].best_dist2)));
+                try w.print("ok@{d:.1}", .{dist});
+            },
+            .climate => try w.print("ok(mean={d:.3})", .{evals[i].climate_mean}),
+            .terrain => try w.print("ok(val={d:.2})", .{evals[i].climate_mean}),
         }
     }
 

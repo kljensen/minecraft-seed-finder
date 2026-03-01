@@ -50,6 +50,7 @@ pub const buildConstraintAliases = search_eval.buildConstraintAliases;
 pub const summarize = search_eval.summarize;
 pub const diagnosticsString = search_eval.diagnosticsString;
 pub const reorderConjunctiveAtomsByEstimatedCost = search_eval.reorderConjunctiveAtomsByEstimatedCost;
+pub const reorderConjunctiveAtomsByAdaptiveScore = search_eval.reorderConjunctiveAtomsByAdaptiveScore;
 pub const emitResult = output.emitResult;
 pub const betterCandidate = output.betterCandidate;
 pub const keepTopK = output.keepTopK;
@@ -92,6 +93,68 @@ fn parseNameRadius(spec: []const u8) ?struct { name: []const u8, radius: i32, mi
     const radius = std.fmt.parseInt(i32, radius_str, 10) catch return null;
     if (name.len == 0 or radius <= 0) return null;
     return .{ .name = name, .radius = radius, .min_count = 1 };
+}
+
+fn parseRangeSpec(spec: []const u8) ?struct { name: []const u8, min_val: ?f32, max_val: ?f32, radius: i32 } {
+    const sep = std.mem.indexOfScalar(u8, spec, ':') orelse return null;
+    const name = std.mem.trim(u8, spec[0..sep], " ");
+    const rest = spec[sep + 1 ..];
+
+    // Find @radius suffix
+    const at_pos = std.mem.lastIndexOfScalar(u8, rest, '@') orelse return null;
+    const range_str = std.mem.trim(u8, rest[0..at_pos], " ");
+    const radius_str = std.mem.trim(u8, rest[at_pos + 1 ..], " ");
+    const radius = std.fmt.parseInt(i32, radius_str, 10) catch return null;
+    if (name.len == 0 or radius <= 0) return null;
+
+    // Parse min..max range
+    const dotdot = std.mem.indexOf(u8, range_str, "..") orelse return null;
+    const min_str = std.mem.trim(u8, range_str[0..dotdot], " ");
+    const max_str = std.mem.trim(u8, range_str[dotdot + 2 ..], " ");
+
+    const min_val: ?f32 = if (min_str.len > 0) std.fmt.parseFloat(f32, min_str) catch return null else null;
+    const max_val: ?f32 = if (max_str.len > 0) std.fmt.parseFloat(f32, max_str) catch return null else null;
+
+    // Reject both-open range
+    if (min_val == null and max_val == null) return null;
+    // Reject NaN/Inf
+    if (min_val) |v| { if (std.math.isNan(v) or std.math.isInf(v)) return null; }
+    if (max_val) |v| { if (std.math.isNan(v) or std.math.isInf(v)) return null; }
+    // Reject min > max
+    if (min_val != null and max_val != null) {
+        if (min_val.? > max_val.?) return null;
+    }
+
+    return .{ .name = name, .min_val = min_val, .max_val = max_val, .radius = radius };
+}
+
+fn parseClimateParam(name: []const u8) ?types.ClimateParam {
+    const params = .{
+        .{ "continentalness", types.ClimateParam.continentalness },
+        .{ "erosion", types.ClimateParam.erosion },
+        .{ "peaks_valleys", types.ClimateParam.peaks_valleys },
+        .{ "weirdness", types.ClimateParam.weirdness },
+        .{ "temperature", types.ClimateParam.temperature },
+        .{ "humidity", types.ClimateParam.humidity },
+    };
+    inline for (params) |p| {
+        if (std.mem.eql(u8, name, p[0])) return p[1];
+    }
+    return null;
+}
+
+fn parseTerrainStat(name: []const u8) ?types.TerrainStat {
+    const stats = .{
+        .{ "mean_height", types.TerrainStat.mean_height },
+        .{ "min_height", types.TerrainStat.min_height },
+        .{ "max_height", types.TerrainStat.max_height },
+        .{ "height_range", types.TerrainStat.height_range },
+        .{ "height_std", types.TerrainStat.height_std },
+    };
+    inline for (stats) |s| {
+        if (std.mem.eql(u8, name, s[0])) return s[1];
+    }
+    return null;
 }
 
 fn parseAnchor(spec: []const u8) ?c.Pos {
@@ -300,7 +363,9 @@ fn printUsage(writer: anytype) !void {
             "  --random-samples <N>                 Test N random samples (requires --random)\n" ++
             "  --require-biome <name:N@radius>      Biome with N+ chunks within radius (keys b1,b2,...)\n" ++
             "  --require-structure <name:radius>    Structure within radius (keys s1,s2,...)\n" ++
-            "  --where <expr>                       Boolean expression over bN/sN/cN\n" ++
+            "  --require-climate <param:min..max@R> Climate param in range for 80%+ of area (keys cl1,...)\n" ++
+            "  --require-terrain <stat:min..max@R>  Terrain elevation stat in range (keys t1,t2,...)\n" ++
+            "  --where <expr>                       Boolean expression over bN/sN/clN/tN/cN\n" ++
             "  --anchor <x:z>                       Evaluate constraints around fixed location\n" ++
             "  --level-dat <path>                   Import seed from Java/Bedrock level.dat\n" ++
             "  --ranked                             Keep top results by score across scan range\n" ++
@@ -332,7 +397,20 @@ fn printUsage(writer: anytype) !void {
             "  --random --count 10                  Find 10 matches from random seeds\n\n" ++
             "Biome count examples:\n" ++
             "  --require-biome 'jagged_peaks:5@300' 5+ chunks of jagged peaks within 300\n" ++
-            "  --require-biome 'ocean:400'          At least 1 ocean chunk within 400 (default)\n",
+            "  --require-biome 'ocean:400'          At least 1 ocean chunk within 400 (default)\n\n" ++
+            "Climate parameters: continentalness, erosion, peaks_valleys, weirdness,\n" ++
+            "  temperature, humidity. Values ≈ -1.0 to 1.0. Requires MC >= 1.18.\n" ++
+            "  continentalness: <-0.46 ocean, -0.19..0.03 coast, 0.3+ far-inland\n" ++
+            "  erosion: <-0.78 extreme peaks, >0.45 flat plains\n" ++
+            "  peaks_valleys: <-0.85 valleys/rivers, >0.7 peaks\n" ++
+            "  temperature: <-0.45 frozen, >0.55 hot (desert/jungle)\n" ++
+            "  humidity: <-0.35 arid, >0.3 humid (jungle)\n\n" ++
+            "Terrain stats: mean_height, min_height, max_height, height_range, height_std.\n" ++
+            "  Values in mapApproxHeight units (0 ≈ sea level, ~5 plains, ~30 peaks).\n" ++
+            "  Examples:\n" ++
+            "  --require-climate 'erosion:..-0.38@200'    mountains nearby\n" ++
+            "  --require-terrain 'min_height:0..@300'     above sea level\n" ++
+            "  --require-terrain 'height_range:10..@150'  dramatic terrain\n",
         .{},
     );
 }
@@ -367,11 +445,24 @@ pub fn freeConstraints(allocator: std.mem.Allocator, constraints: []Constraint) 
                 allocator.free(v.label);
                 allocator.free(v.regions);
             },
+            .climate => |v| {
+                allocator.free(v.key);
+                allocator.free(v.label);
+                allocator.free(v.offsets);
+                allocator.free(v.points);
+            },
+            .terrain => |v| {
+                allocator.free(v.key);
+                allocator.free(v.label);
+                allocator.free(v.offsets);
+                allocator.free(v.points);
+            },
         }
     }
 }
 
 const BATCH_SIZE: u64 = 4096;
+const ADAPTIVE_LEARN_SEEDS: u64 = 4096;
 
 const SharedContext = struct {
     // Read-only (set before workers start)
@@ -399,6 +490,14 @@ const SharedContext = struct {
     cancel_flag: u8, // 0 = running, 1 = cancel
     samples_claimed: u64,
 
+    // Adaptive constraint reordering (atomic mutable)
+    adaptive_state: u8 = 0, // 0=learning, 1=reordering, 2=done
+    adaptive_seeds_seen: u64 = 0,
+    adaptive_eval_counts: ?[]u64 = null,
+    adaptive_fail_counts: ?[]u64 = null,
+    conj_atoms_buf_b: ?[]usize = null,
+    active_conj_buf: u8 = 0, // 0=conjunctive_eval_atoms, 1=conj_atoms_buf_b
+
     // Mutex-guarded
     output_mutex: std.Thread.Mutex,
     output_file: std.fs.File,
@@ -422,6 +521,106 @@ fn reportError(shared: *SharedContext, e: anyerror) void {
     defer shared.error_mutex.unlock();
     if (shared.first_error == null) shared.first_error = e;
     @atomicStore(u8, &shared.cancel_flag, @as(u8, 1), .release);
+}
+
+fn collectAdaptiveStats(shared: *SharedContext, ctx: *ThreadContext, atoms: []const usize) void {
+    const eval_counts = shared.adaptive_eval_counts orelse return;
+    const fail_counts = shared.adaptive_fail_counts orelse return;
+
+    for (atoms) |idx| {
+        const alias_idx = shared.aliases[idx];
+        if (ctx.evals[alias_idx].epoch == ctx.eval_epoch and ctx.evals[alias_idx].computed) {
+            _ = @atomicRmw(u64, &eval_counts[idx], .Add, 1, .monotonic);
+            if (!ctx.evals[alias_idx].matched) {
+                _ = @atomicRmw(u64, &fail_counts[idx], .Add, 1, .monotonic);
+            }
+        }
+    }
+
+    const seen_prev = @atomicRmw(u64, &shared.adaptive_seeds_seen, .Add, 1, .monotonic);
+    if (seen_prev == ADAPTIVE_LEARN_SEEDS - 1) {
+        if (@cmpxchgStrong(u8, &shared.adaptive_state, 0, 1, .acquire, .monotonic) == null) {
+            performAdaptiveReorder(shared);
+        }
+    }
+}
+
+fn performAdaptiveReorder(shared: *SharedContext) void {
+    const buf_b = shared.conj_atoms_buf_b orelse return;
+    const atoms_a = shared.conjunctive_eval_atoms orelse return;
+    const n = atoms_a.len;
+    const eval_counts = shared.adaptive_eval_counts orelse return;
+    const fail_counts = shared.adaptive_fail_counts orelse return;
+    const num_constraints = shared.constraints.len;
+
+    // Snapshot atomic counters (use c_allocator since this runs on a worker thread)
+    const c_alloc = std.heap.c_allocator;
+    const eval_snap = c_alloc.alloc(u64, num_constraints) catch return;
+    defer c_alloc.free(eval_snap);
+    const fail_snap = c_alloc.alloc(u64, num_constraints) catch return;
+    defer c_alloc.free(fail_snap);
+    for (0..num_constraints) |i| {
+        eval_snap[i] = @atomicLoad(u64, &eval_counts[i], .monotonic);
+        fail_snap[i] = @atomicLoad(u64, &fail_counts[i], .monotonic);
+    }
+
+    // Copy current order to buf_b, then sort by adaptive score
+    @memcpy(buf_b[0..n], atoms_a);
+    reorderConjunctiveAtomsByAdaptiveScore(
+        buf_b[0..n],
+        shared.constraints,
+        shared.aliases,
+        eval_snap,
+        fail_snap,
+    );
+
+    // Check if order actually changed
+    var changed = false;
+    for (0..n) |i| {
+        if (buf_b[i] != atoms_a[i]) {
+            changed = true;
+            break;
+        }
+    }
+
+    if (changed) {
+        printAdaptiveReorderDiag(atoms_a, buf_b[0..n], shared.constraints, shared.aliases, eval_snap[0..shared.constraints.len], fail_snap[0..shared.constraints.len]);
+    }
+
+    // Publish new order (release ensures buf_b contents visible before flag)
+    @atomicStore(u8, &shared.active_conj_buf, 1, .release);
+    @atomicStore(u8, &shared.adaptive_state, 2, .release);
+}
+
+fn printAdaptiveReorderDiag(
+    old_order: []const usize,
+    new_order: []const usize,
+    constraints: []const Constraint,
+    aliases: []const usize,
+    eval_counts: []const u64,
+    fail_counts: []const u64,
+) void {
+    const stderr = std.io.getStdErr().writer();
+    stderr.print("adaptive reorder: learned from {d} seeds\n", .{ADAPTIVE_LEARN_SEEDS}) catch return;
+    for (new_order, 0..) |idx, i| {
+        const alias_idx = aliases[idx];
+        const label = constraints[alias_idx].label();
+        const evals = eval_counts[idx];
+        const fails = fail_counts[idx];
+        const p_reject = @as(f64, @floatFromInt(fails + 1)) / @as(f64, @floatFromInt(evals + 2));
+        stderr.print("  {d}. {s}: evals={d} fails={d} p_reject={d:.3}\n", .{ i + 1, label, evals, fails, p_reject }) catch return;
+    }
+    stderr.print("  old:", .{}) catch return;
+    for (old_order) |idx| {
+        const alias_idx = aliases[idx];
+        stderr.print(" {s}", .{constraints[alias_idx].key()}) catch return;
+    }
+    stderr.print("\n  new:", .{}) catch return;
+    for (new_order) |idx| {
+        const alias_idx = aliases[idx];
+        stderr.print(" {s}", .{constraints[alias_idx].key()}) catch return;
+    }
+    stderr.print("\n", .{}) catch return;
 }
 
 fn workerLoop(ctx: *ThreadContext, shared: *SharedContext) void {
@@ -491,12 +690,25 @@ fn workerLoop(ctx: *ThreadContext, shared: *SharedContext) void {
                 break :blk computed_spawn;
             };
 
+            // Snapshot active conjunctive atoms once per seed (double-buffer for adaptive reorder)
+            const active_atoms: ?[]const usize = if (@atomicLoad(u8, &shared.active_conj_buf, .acquire) == 1)
+                shared.conj_atoms_buf_b
+            else
+                shared.conjunctive_eval_atoms;
+
             const matches_expr = if (shared.expr_is_literal_true)
                 true
-            else if (shared.conjunctive_eval_atoms) |atoms|
+            else if (active_atoms) |atoms|
                 evalConjunctiveAtoms(atoms, shared.constraints, shared.aliases, ctx.evals, ctx.eval_epoch, ctx.gen, seed, shared.mc, anchor)
             else
                 evalExpr(shared.parser_or_nodes, shared.expr_root, shared.constraints, shared.aliases, ctx.evals, ctx.eval_epoch, ctx.gen, seed, shared.mc, anchor);
+
+            // Adaptive learning: collect per-atom pass/fail stats
+            if (@atomicLoad(u8, &shared.adaptive_state, .monotonic) == 0) {
+                if (active_atoms) |atoms| {
+                    collectAdaptiveStats(shared, ctx, atoms);
+                }
+            }
 
             batch_tested += 1;
 
@@ -568,6 +780,10 @@ pub fn main() !void {
     defer biome_constraint_ids.deinit();
     var structure_constraint_ids = std.ArrayList(usize).init(allocator);
     defer structure_constraint_ids.deinit();
+    var climate_constraint_ids = std.ArrayList(usize).init(allocator);
+    defer climate_constraint_ids.deinit();
+    var terrain_constraint_ids = std.ArrayList(usize).init(allocator);
+    defer terrain_constraint_ids.deinit();
 
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
@@ -602,6 +818,8 @@ pub fn main() !void {
 
     var biome_idx: usize = 0;
     var structure_idx: usize = 0;
+    var climate_idx: usize = 0;
+    var terrain_idx: usize = 0;
 
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--help")) {
@@ -721,6 +939,59 @@ pub fn main() !void {
                 .regions = &.{},
             } });
             try structure_constraint_ids.append(constraints.items.len - 1);
+        } else if (std.mem.eql(u8, arg, "--require-climate")) {
+            const spec = args.next() orelse return error.InvalidArguments;
+            const parsed = parseRangeSpec(spec) orelse {
+                std.debug.print("error: invalid climate spec '{s}'\n", .{spec});
+                return error.InvalidArguments;
+            };
+            const param = parseClimateParam(parsed.name) orelse {
+                std.debug.print("error: unknown climate parameter '{s}'\n", .{parsed.name});
+                return error.InvalidArguments;
+            };
+
+            climate_idx += 1;
+            const key = try std.fmt.allocPrint(allocator, "cl{d}", .{climate_idx});
+            const label = try std.fmt.allocPrint(allocator, "climate:{s}@{d}", .{ parsed.name, parsed.radius });
+            try constraints.append(.{ .climate = .{
+                .key = key,
+                .label = label,
+                .param = param,
+                .min_val = parsed.min_val,
+                .max_val = parsed.max_val,
+                .radius = parsed.radius,
+                .radius2 = @as(i64, parsed.radius) * parsed.radius,
+                .min_fraction = 0.8,
+                .offsets = try buildBiomeOffsets(allocator, parsed.radius),
+                .points = &.{},
+            } });
+            try climate_constraint_ids.append(constraints.items.len - 1);
+        } else if (std.mem.eql(u8, arg, "--require-terrain")) {
+            const spec = args.next() orelse return error.InvalidArguments;
+            const parsed = parseRangeSpec(spec) orelse {
+                std.debug.print("error: invalid terrain spec '{s}'\n", .{spec});
+                return error.InvalidArguments;
+            };
+            const stat = parseTerrainStat(parsed.name) orelse {
+                std.debug.print("error: unknown terrain stat '{s}'\n", .{parsed.name});
+                return error.InvalidArguments;
+            };
+
+            terrain_idx += 1;
+            const key = try std.fmt.allocPrint(allocator, "t{d}", .{terrain_idx});
+            const label = try std.fmt.allocPrint(allocator, "terrain:{s}@{d}", .{ parsed.name, parsed.radius });
+            try constraints.append(.{ .terrain = .{
+                .key = key,
+                .label = label,
+                .stat = stat,
+                .min_val = parsed.min_val,
+                .max_val = parsed.max_val,
+                .radius = parsed.radius,
+                .radius2 = @as(i64, parsed.radius) * parsed.radius,
+                .offsets = try buildBiomeOffsets(allocator, parsed.radius),
+                .points = &.{},
+            } });
+            try terrain_constraint_ids.append(constraints.items.len - 1);
         } else {
             return error.InvalidArguments;
         }
@@ -741,6 +1012,11 @@ pub fn main() !void {
     if (random_mode and do_resume) return error.InvalidArguments;
     if (!random_mode and start_seed > max_seed) return error.InvalidArguments;
     if (!random_mode and ranked and max_seed == std.math.maxInt(u64)) return error.InvalidArguments;
+
+    if ((climate_constraint_ids.items.len > 0 or terrain_constraint_ids.items.len > 0) and mc < c.MC_1_18) {
+        std.debug.print("error: --require-climate and --require-terrain require --version 1.18 or later\n", .{});
+        return error.InvalidArguments;
+    }
 
     if (num_threads > 0) {
         if (perf_breakdown_label != null) {
@@ -786,6 +1062,16 @@ pub fn main() !void {
                     req.regions = try buildStructureRegionsForAnchor(allocator, anchor, req.*);
                 }
             },
+            .climate => |*req| {
+                if (anchor_override) |anchor| {
+                    req.points = try buildBiomePointsForAnchor(allocator, anchor, req.offsets);
+                }
+            },
+            .terrain => |*req| {
+                if (anchor_override) |anchor| {
+                    req.points = try buildBiomePointsForAnchor(allocator, anchor, req.offsets);
+                }
+            },
         }
     }
 
@@ -799,7 +1085,7 @@ pub fn main() !void {
     defer if (conjunctive_eval_atoms) |atoms| allocator.free(atoms);
 
     if (where_expr) |where_filter| {
-        var parser = ExprParser.init(allocator, where_filter, constraints.items.len, biome_constraint_ids.items, structure_constraint_ids.items);
+        var parser = ExprParser.init(allocator, where_filter, constraints.items.len, biome_constraint_ids.items, structure_constraint_ids.items, climate_constraint_ids.items, terrain_constraint_ids.items);
         defer parser.deinit();
         expr_root = try parser.parse();
         try parser_or_nodes.appendSlice(parser.nodes.items);
@@ -881,6 +1167,21 @@ pub fn main() !void {
         if (conjunctive_eval_atoms) |eval_atoms| {
             reorderConjunctiveAtomsByEstimatedCost(eval_atoms, constraints.items);
         }
+    }
+
+    // Adaptive reordering buffers (multi-threaded path only)
+    var adaptive_eval_counts: ?[]u64 = null;
+    var adaptive_fail_counts: ?[]u64 = null;
+    var conj_atoms_buf_b: ?[]usize = null;
+    defer if (adaptive_eval_counts) |a| allocator.free(a);
+    defer if (adaptive_fail_counts) |a| allocator.free(a);
+    defer if (conj_atoms_buf_b) |a| allocator.free(a);
+    if (conjunctive_eval_atoms != null and num_threads > 0) {
+        adaptive_eval_counts = try allocator.alloc(u64, constraints.items.len);
+        @memset(adaptive_eval_counts.?, 0);
+        adaptive_fail_counts = try allocator.alloc(u64, constraints.items.len);
+        @memset(adaptive_fail_counts.?, 0);
+        conj_atoms_buf_b = try allocator.alloc(usize, conjunctive_eval_atoms.?.len);
     }
 
     const start_ns = std.time.nanoTimestamp();
@@ -1036,7 +1337,7 @@ pub fn main() !void {
             } else {
                 const remaining = if (seed < max_seed) max_seed - seed else 0;
                 const eta_s = if (rate > 0) @as(f64, @floatFromInt(remaining)) / rate else 0;
-                try stdout.print("progress: tested={d} found={d} current_seed={d} rate={d:.0}/s eta={d:.0}s\n", .{ tested, found, seed, rate, eta_s });
+                try stdout.print("progress: tested={d} found={d} current_seed={d} rate={d:.0}/s eta={d:.0}s\n", .{ tested, found, @as(i64, @bitCast(seed)), rate, eta_s });
             }
         }
 
@@ -1073,6 +1374,9 @@ pub fn main() !void {
         .tested_count = tested,
         .cancel_flag = 0,
         .samples_claimed = 0,
+        .adaptive_eval_counts = adaptive_eval_counts,
+        .adaptive_fail_counts = adaptive_fail_counts,
+        .conj_atoms_buf_b = conj_atoms_buf_b,
         .output_mutex = .{},
         .output_file = output_file,
         .error_mutex = .{},
@@ -1176,7 +1480,7 @@ pub fn main() !void {
     if (random_mode) {
         try stdout.print("summary: found={d} tested={d} mode=random\n", .{ found, tested });
     } else {
-        try stdout.print("summary: found={d} tested={d} start_seed={d} end_seed={d}\n", .{ found, tested, start_seed, if (seed == 0) 0 else seed - 1 });
+        try stdout.print("summary: found={d} tested={d} start_seed={d} end_seed={d}\n", .{ found, tested, @as(i64, @bitCast(start_seed)), @as(i64, @bitCast(if (seed == 0) @as(u64, 0) else seed - 1)) });
     }
     if (perf_breakdown_label) |label| {
         const total_hot_ns = perf_breakdown.apply_seed_ns + perf_breakdown.get_spawn_ns + perf_breakdown.constraint_eval_ns + perf_breakdown.output_ns;

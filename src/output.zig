@@ -30,13 +30,35 @@ pub fn writeCsvEscaped(writer: anytype, value: []const u8) !void {
     try writer.writeByte('"');
 }
 
+fn formatSeedGrouped(writer: anytype, seed: i64) !void {
+    var buf: [20]u8 = undefined;
+    const neg = seed < 0;
+    const unsigned: u64 = @bitCast(seed);
+    const val: u64 = if (neg) 0 -% unsigned else unsigned;
+    const digits = std.fmt.formatIntBuf(&buf, val, 10, .lower, .{});
+    const s = buf[0..digits];
+    if (neg) try writer.writeByte('-');
+    const first = s.len % 4;
+    if (first > 0) {
+        try writer.writeAll(s[0..first]);
+        if (first < s.len) try writer.writeByte(' ');
+    }
+    var i: usize = first;
+    while (i < s.len) : (i += 4) {
+        try writer.writeAll(s[i..][0..4]);
+        if (i + 4 < s.len) try writer.writeByte(' ');
+    }
+}
+
 pub fn emitResult(writer: anytype, fmt: OutputFormat, item: MatchCandidate) !void {
+    const signed_seed: i64 = @bitCast(item.seed);
     switch (fmt) {
         .text => {
+            try writer.writeAll("seed=");
+            try formatSeedGrouped(writer, signed_seed);
             try writer.print(
-                "seed={d} spawn=({d},{d}) anchor=({d},{d}) score={d:.3} matched={d}/{d} diagnostics={s}\n",
+                " spawn=({d},{d}) anchor=({d},{d}) score={d:.3} matched={d}/{d} diagnostics={s}\n",
                 .{
-                    item.seed,
                     item.spawn.x,
                     item.spawn.z,
                     item.anchor.x,
@@ -50,7 +72,7 @@ pub fn emitResult(writer: anytype, fmt: OutputFormat, item: MatchCandidate) !voi
         },
         .jsonl => {
             const Record = struct {
-                seed: u64,
+                seed: i64,
                 spawn_x: i32,
                 spawn_z: i32,
                 anchor_x: i32,
@@ -61,7 +83,7 @@ pub fn emitResult(writer: anytype, fmt: OutputFormat, item: MatchCandidate) !voi
                 diagnostics: []const u8,
             };
             try std.json.stringify(Record{
-                .seed = item.seed,
+                .seed = signed_seed,
                 .spawn_x = item.spawn.x,
                 .spawn_z = item.spawn.z,
                 .anchor_x = item.anchor.x,
@@ -77,7 +99,7 @@ pub fn emitResult(writer: anytype, fmt: OutputFormat, item: MatchCandidate) !voi
             try writer.print(
                 "{d},{d},{d},{d},{d},{d:.6},{d},{d},",
                 .{
-                    item.seed,
+                    signed_seed,
                     item.spawn.x,
                     item.spawn.z,
                     item.anchor.x,

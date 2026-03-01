@@ -264,7 +264,7 @@ test "conjunctive expression plan matches recursive evaluator" {
     } });
     try structure_ids.append(1);
 
-    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
     const plan = (try buildConjunctiveAtomPlan(allocator, parser.nodes.items, root)) orelse unreachable;
@@ -347,7 +347,7 @@ test "canonical conjunctive plan deduplicates aliased atoms without changing dec
     } });
     try structure_ids.append(2);
 
-    var parser = ExprParser.init(allocator, "b1 and b2 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and b2 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
     const plan = (try buildConjunctiveAtomPlan(allocator, parser.nodes.items, root)) orelse unreachable;
@@ -949,7 +949,7 @@ test "search regression: spawn-anchor biome+structure query" {
     } });
     try structure_ids.append(1);
 
-    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
 
@@ -1199,7 +1199,7 @@ test "search regression fixture: full emitted stream + summary" {
     } });
     try structure_ids.append(1);
 
-    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
     const aliases = try buildConstraintAliases(allocator, constraints.items);
@@ -1272,7 +1272,7 @@ test "search regression fixture: ranked jsonl stream + summary" {
     } });
     try structure_ids.append(1);
 
-    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
     const aliases = try buildConstraintAliases(allocator, constraints.items);
@@ -1345,7 +1345,7 @@ test "search regression fixture: csv stream + summary" {
     } });
     try structure_ids.append(1);
 
-    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
     const aliases = try buildConstraintAliases(allocator, constraints.items);
@@ -1418,7 +1418,7 @@ test "native shadow does not influence results" {
     } });
     try structure_ids.append(1);
 
-    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
     const aliases = try buildConstraintAliases(allocator, constraints.items);
@@ -1472,7 +1472,7 @@ test "native compare-only backend does not influence results" {
     } });
     try structure_ids.append(1);
 
-    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
     const aliases = try buildConstraintAliases(allocator, constraints.items);
@@ -1527,7 +1527,7 @@ test "native shadow + compare-only together do not influence results" {
     } });
     try structure_ids.append(1);
 
-    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items);
+    var parser = ExprParser.init(allocator, "b1 and s1", constraints.items.len, biome_ids.items, structure_ids.items, &.{}, &.{});
     defer parser.deinit();
     const root = try parser.parse();
     const aliases = try buildConstraintAliases(allocator, constraints.items);
