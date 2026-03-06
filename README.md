@@ -130,18 +130,20 @@ sampling 7 Perlin noise octaves across 6 climate dimensions. The seed-finder
 optimizes this by checking climate parameters one at a time and skipping
 remaining noise calls when earlier parameters already rule out the target biome.
 
-Benchmarks scan 500 seeds starting from 0, anchored at the origin, single-threaded,
-MC 1.21.1 on Apple M4. Both tools find identical matches.
+Benchmarks anchored at the origin, single-threaded, MC 1.21.1 on Apple M4.
+Both tools find identical seeds.
 
 | Query | cubiomes C | seed-finder | Speedup |
 |-------|-----------|-------------|---------|
-| `cherry_grove:1@300` | 28.7s | 21.0s | **1.37x** |
-| `flower_forest:5@500` + `windswept_hills:5@500` | 78.6s | 61.1s | **1.29x** |
+| `cherry_grove:1@300` (500 seeds) | 28.7s | 21.0s | **1.37x** |
+| `flower_forest:5@500` + `windswept_hills:5@500` (500 seeds) | 78.6s | 61.1s | **1.29x** |
+| `cherry_grove:1@300` + `village:500` (first 5 matches) | 6.7s | 2.8s | **2.4x** |
 
 The advantage comes from climate early-exit: rare biomes like cherry grove have
 narrow climate ranges, so most map points are rejected after sampling just 1-2
 of the 6 noise parameters instead of all 7. The benefit scales with search
-radius (more points to reject) and biome rarity.
+radius (more points to reject) and biome rarity. Combined queries benefit
+further because seeds failing the biome check skip the structure check entirely.
 
 Structure-only queries use the same algorithm as cubiomes (region coordinate
 math + viability check) with no significant speed difference.
