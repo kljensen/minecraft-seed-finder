@@ -3,6 +3,7 @@ const c = @import("cubiomes_port.zig");
 const bedrock = @import("bedrock.zig");
 const biome_names = @import("biome_names.zig");
 const nbt = @import("nbt.zig");
+const search_eval = @import("search_eval.zig");
 const app = @import("main.zig");
 
 const BiomeReq = app.BiomeReq;
@@ -96,7 +97,7 @@ test "precomputed structure regions match dynamic region scan" {
         .radius = 700,
         .radius2 = @as(i64, 700) * 700,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     };
     var req_precomputed = req_dynamic;
@@ -185,7 +186,7 @@ test "structure threshold evaluation matches full evaluation decisions" {
     const mc = c.MC_1_21_1;
     const anchor = c.Pos{ .x = 128, .z = -256 };
     const st = try bedrock.parseStructure(allocator, "village") orelse unreachable;
-    const cfg = bedrock.getStructureConfig(st, mc) orelse unreachable;
+    const cfg = bedrock.getStructureConfig(.bedrock, st, mc) orelse unreachable;
 
     const req = StructureReq{
         .key = "",
@@ -248,6 +249,7 @@ test "conjunctive expression plan matches recursive evaluator" {
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -259,7 +261,7 @@ test "conjunctive expression plan matches recursive evaluator" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(1);
@@ -319,6 +321,7 @@ test "canonical conjunctive plan deduplicates aliased atoms without changing dec
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -331,6 +334,7 @@ test "canonical conjunctive plan deduplicates aliased atoms without changing dec
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(1);
 
@@ -342,7 +346,7 @@ test "canonical conjunctive plan deduplicates aliased atoms without changing dec
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(2);
@@ -410,7 +414,7 @@ test "conjunctive plan cost ordering places cheaper structure checks first" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     } });
 
@@ -690,7 +694,7 @@ test "opt-in perf: precomputed structure regions" {
         .radius = 700,
         .radius2 = @as(i64, 700) * 700,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     };
     var req_precomputed = req_dynamic;
@@ -933,6 +937,7 @@ test "search regression: spawn-anchor biome+structure query" {
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -944,7 +949,7 @@ test "search regression: spawn-anchor biome+structure query" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(1);
@@ -1162,6 +1167,8 @@ fn snapshotSearchOutput(
 test "search regression fixture: full emitted stream + summary" {
     const allocator = std.testing.allocator;
     const mc = c.MC_1_21_1;
+    search_eval.setEdition(.java);
+    defer search_eval.setEdition(.bedrock);
 
     var constraints = std.ArrayList(Constraint).init(allocator);
     defer {
@@ -1183,6 +1190,7 @@ test "search regression fixture: full emitted stream + summary" {
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -1194,7 +1202,7 @@ test "search regression fixture: full emitted stream + summary" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.java, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(1);
@@ -1235,6 +1243,8 @@ test "search regression fixture: full emitted stream + summary" {
 test "search regression fixture: ranked jsonl stream + summary" {
     const allocator = std.testing.allocator;
     const mc = c.MC_1_21_1;
+    search_eval.setEdition(.java);
+    defer search_eval.setEdition(.bedrock);
 
     var constraints = std.ArrayList(Constraint).init(allocator);
     defer {
@@ -1256,6 +1266,7 @@ test "search regression fixture: ranked jsonl stream + summary" {
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -1267,7 +1278,7 @@ test "search regression fixture: ranked jsonl stream + summary" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.java, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(1);
@@ -1308,6 +1319,8 @@ test "search regression fixture: ranked jsonl stream + summary" {
 test "search regression fixture: csv stream + summary" {
     const allocator = std.testing.allocator;
     const mc = c.MC_1_21_1;
+    search_eval.setEdition(.java);
+    defer search_eval.setEdition(.bedrock);
 
     var constraints = std.ArrayList(Constraint).init(allocator);
     defer {
@@ -1329,6 +1342,7 @@ test "search regression fixture: csv stream + summary" {
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -1340,7 +1354,7 @@ test "search regression fixture: csv stream + summary" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.java, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(1);
@@ -1402,6 +1416,7 @@ test "native shadow does not influence results" {
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -1413,7 +1428,7 @@ test "native shadow does not influence results" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(1);
@@ -1456,6 +1471,7 @@ test "native compare-only backend does not influence results" {
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -1467,7 +1483,7 @@ test "native compare-only backend does not influence results" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(1);
@@ -1511,6 +1527,7 @@ test "native shadow + compare-only together do not influence results" {
         .radius2 = @as(i64, 200) * 200,
         .offsets = try buildBiomeOffsets(allocator, 200),
         .points = &.{},
+        .climate_bounds = search_eval.precomputeBiomeClimateBounds(mc, biome_id),
     } });
     try biome_ids.append(0);
 
@@ -1522,7 +1539,7 @@ test "native shadow + compare-only together do not influence results" {
         .radius = 500,
         .radius2 = @as(i64, 500) * 500,
         .structure_c = st.toC(),
-        .cfg = bedrock.getStructureConfig(st, mc),
+        .cfg = bedrock.getStructureConfig(.bedrock, st, mc),
         .regions = &.{},
     } });
     try structure_ids.append(1);

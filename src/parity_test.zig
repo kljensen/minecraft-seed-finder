@@ -75,7 +75,7 @@ test "full parity corpus matches reference outputs" {
         const st = try bedrock.parseStructure(std.testing.allocator, v.st) orelse {
             std.debug.panic("unknown structure tag in corpus: {s}", .{v.st});
         };
-        const pos = bedrock.getStructurePos(st, v.mc, v.seed, v.rx, v.rz) orelse {
+        const pos = bedrock.getStructurePos(.bedrock, st.toC(), v.mc, v.seed, v.rx, v.rz) orelse {
             std.debug.panic("missing structure pos for {s}", .{v.st});
         };
         try std.testing.expectEqual(v.x, pos.x);
