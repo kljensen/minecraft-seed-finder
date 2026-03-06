@@ -1,5 +1,5 @@
 seed=2 spawn=(-32,0) anchor=(-32,0) score=2.728 matched=2/2 diagnostics=b1=ok(547)@82.5;s1=ok@430.1
-seed=6 spawn=(-80,-224) anchor=(-80,-224) score=3.279 matched=2/2 diagnostics=b1=ok(238)@26.8;s1=ok@293.5
+seed=6 spawn=(-80,-224) anchor=(-80,-224) score=3.198 matched=2/2 diagnostics=b1=ok(211)@43.1;s1=ok@293.5
 seed=9 spawn=(0,0) anchor=(0,0) score=3.072 matched=2/2 diagnostics=b1=ok(5237)@0.0;s1=ok@463.9
 seed=12 spawn=(-32,-32) anchor=(-32,-32) score=3.401 matched=2/2 diagnostics=b1=ok(5527)@0.0;s1=ok@299.5
 seed=15 spawn=(0,0) anchor=(0,0) score=3.502 matched=2/2 diagnostics=b1=ok(2110)@0.0;s1=ok@249.2

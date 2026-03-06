@@ -82,6 +82,18 @@ fuzz ROUNDS="8":
 fuzz-quick:
     scripts/diff_fuzz.sh 3
 
+# Equivalence tests: golden files, format consistency, diverse queries, fuzz
+equivalence FUZZ_ROUNDS="5":
+    scripts/equivalence.sh {{FUZZ_ROUNDS}}
+
+# Quick equivalence check (no fuzz rounds)
+equivalence-quick:
+    scripts/equivalence.sh 0
+
+# CLI conformance: diff against C reference or golden snapshots
+conformance ROUNDS="6":
+    scripts/diff_cli_stream.sh {{ROUNDS}}
+
 # Throughput benchmark across scalar/SIMD/parallel modes
 bench:
     scripts/bench_parity.sh

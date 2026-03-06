@@ -115,26 +115,36 @@ ocean_ruin, outpost, ruined_portal, shipwreck, swamp_hut, treasure, village
 ## Testing
 
 ```sh
-zig build test
+zig build test                 # unit tests
+just equivalence               # golden files, format consistency, fuzz
+just fuzz                      # differential fuzz against C reference
+just conformance               # full CLI conformance (requires C sources)
 ```
 
 ## Performance
 
-The cubiomes port was iteratively profiled and optimized over 10 rounds. All
-measurements used a hard biome+structure query (`flower_forest:5@500` +
-`extreme_hills:5@500` + `village:600`, 500K seeds, anchored).
+### vs cubiomes C
 
-### What worked
+Biome scanning is the expensive part of seed finding — each point requires
+sampling 7 Perlin noise octaves across 6 climate dimensions. The seed-finder
+optimizes this by checking climate parameters one at a time and skipping
+remaining noise calls when earlier parameters already rule out the target biome.
 
-| Speedup | Optimization |
-|---------|-------------|
-| 4.3x | Climate parameter early-exit — skip remaining noise calls when earlier parameters already rule out the target biome |
-| 1.56x | Defer `getSpawn` for anchor queries — spawn was 36% of per-seed cost and wasted on seeds that fail constraints |
-| 1.06x | Cached sequential multi-biome scan with leaf-level feasibility — share noise cache across biome constraints, tighter per-leaf bounds |
-| 1.04x | Rewrite `get_resulting_node`/`get_np_dist` biome tree walk as clean idiomatic Zig |
-| 1.04x | Structure eval: region sorting by distance + constraint cost ordering |
+Benchmarks scan 500 seeds starting from 0, anchored at the origin, single-threaded,
+MC 1.21.1 on Apple M4. Both tools find identical matches.
 
-**Net result**: **84s → 18s** on a hard biome+structure query (4.5x).
+| Query | cubiomes C | seed-finder | Speedup |
+|-------|-----------|-------------|---------|
+| `cherry_grove:1@300` | 28.7s | 21.0s | **1.37x** |
+| `flower_forest:5@500` + `windswept_hills:5@500` | 78.6s | 61.1s | **1.29x** |
+
+The advantage comes from climate early-exit: rare biomes like cherry grove have
+narrow climate ranges, so most map points are rejected after sampling just 1-2
+of the 6 noise parameters instead of all 7. The benefit scales with search
+radius (more points to reject) and biome rarity.
+
+Structure-only queries use the same algorithm as cubiomes (region coordinate
+math + viability check) with no significant speed difference.
 
 ### Multi-threading
 
@@ -148,8 +158,20 @@ Use `--threads auto` (or `--threads N`) for near-linear scaling:
 | 8       | 5.8x    |
 
 Each thread gets its own Generator and evaluation state — seeds are
-embarrassingly parallel. Incompatible with `--checkpoint` and
-`--perf-breakdown`/`--perf-eval-detail`.
+embarrassingly parallel.
+
+### Optimization history
+
+The Zig port was iteratively profiled and optimized over 10 rounds. Key wins
+(measured as internal before/after on a hard biome+structure query):
+
+| Speedup | Optimization |
+|---------|-------------|
+| ~1.3x | Climate parameter early-exit — skip remaining noise calls when earlier parameters already rule out the target biome |
+| 1.56x | Defer `getSpawn` for anchor queries — spawn was 36% of per-seed cost and wasted on seeds that fail constraints |
+| 1.06x | Cached sequential multi-biome scan — share noise cache across biome constraints |
+| 1.04x | Rewrite `get_resulting_node`/`get_np_dist` biome tree walk as clean idiomatic Zig |
+| 1.04x | Structure eval: region sorting by distance + constraint cost ordering |
 
 ### What didn't work
 
