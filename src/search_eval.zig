@@ -570,10 +570,7 @@ pub fn setBiomeClimateEarlyExitEnabled(enabled: bool) void {
 }
 
 inline fn getStructurePosForReq(req: StructureReq, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?bedrock.Pos {
-    if (!structure_fast_pos_enabled) {
-        return bedrock.getStructurePosC(req.structure_c, mc, seed, reg_x, reg_z);
-    }
-    return bedrock.getStructurePosFast(req.structure_c, mc, seed, reg_x, reg_z, req.pos_mode, req.cfg_raw);
+    return bedrock.getStructurePosC(req.structure_c, mc, seed, reg_x, reg_z);
 }
 
 fn chunkRange(cfg: bedrock.StructureConfig) i32 {

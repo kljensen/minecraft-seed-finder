@@ -462,15 +462,13 @@ pub fn freeConstraints(allocator: std.mem.Allocator, constraints: []Constraint) 
 }
 
 const BATCH_SIZE: u64 = 4096;
-const ADAPTIVE_LEARN_SEEDS: u64 = 4096;
-
 const SharedContext = struct {
     // Read-only (set before workers start)
     constraints: []const Constraint,
     parser_or_nodes: []const ExprNode,
     expr_root: usize,
     aliases: []const usize,
-    conjunctive_eval_atoms: ?[]const usize,
+    conjunctive_eval_atoms: ?[]usize,
     expr_is_literal_true: bool,
     mc: i32,
     anchor_override: ?c.Pos,
@@ -492,6 +490,7 @@ const SharedContext = struct {
 
     // Adaptive constraint reordering (atomic mutable)
     adaptive_state: u8 = 0, // 0=learning, 1=reordering, 2=done
+    adaptive_next_threshold: u64 = 4096,
     adaptive_seeds_seen: u64 = 0,
     adaptive_eval_counts: ?[]u64 = null,
     adaptive_fail_counts: ?[]u64 = null,
@@ -538,7 +537,8 @@ fn collectAdaptiveStats(shared: *SharedContext, ctx: *ThreadContext, atoms: []co
     }
 
     const seen_prev = @atomicRmw(u64, &shared.adaptive_seeds_seen, .Add, 1, .monotonic);
-    if (seen_prev == ADAPTIVE_LEARN_SEEDS - 1) {
+    const threshold = @atomicLoad(u64, &shared.adaptive_next_threshold, .monotonic);
+    if (seen_prev == threshold - 1) {
         if (@cmpxchgStrong(u8, &shared.adaptive_state, 0, 1, .acquire, .monotonic) == null) {
             performAdaptiveReorder(shared);
         }
@@ -546,12 +546,17 @@ fn collectAdaptiveStats(shared: *SharedContext, ctx: *ThreadContext, atoms: []co
 }
 
 fn performAdaptiveReorder(shared: *SharedContext) void {
-    const buf_b = shared.conj_atoms_buf_b orelse return;
     const atoms_a = shared.conjunctive_eval_atoms orelse return;
-    const n = atoms_a.len;
+    const buf_b = shared.conj_atoms_buf_b orelse return;
     const eval_counts = shared.adaptive_eval_counts orelse return;
     const fail_counts = shared.adaptive_fail_counts orelse return;
     const num_constraints = shared.constraints.len;
+
+    // Determine which buffer is currently active (src) and which is the target (dst)
+    const active = @atomicLoad(u8, &shared.active_conj_buf, .acquire);
+    const src: []const usize = if (active == 1) buf_b[0..atoms_a.len] else atoms_a;
+    const dst: []usize = if (active == 1) atoms_a else buf_b[0..atoms_a.len];
+    const n = atoms_a.len;
 
     // Snapshot atomic counters (use c_allocator since this runs on a worker thread)
     const c_alloc = std.heap.c_allocator;
@@ -564,10 +569,10 @@ fn performAdaptiveReorder(shared: *SharedContext) void {
         fail_snap[i] = @atomicLoad(u64, &fail_counts[i], .monotonic);
     }
 
-    // Copy current order to buf_b, then sort by adaptive score
-    @memcpy(buf_b[0..n], atoms_a);
+    // Copy current order to dst, then sort by adaptive score
+    @memcpy(dst, src);
     reorderConjunctiveAtomsByAdaptiveScore(
-        buf_b[0..n],
+        dst,
         shared.constraints,
         shared.aliases,
         eval_snap,
@@ -577,19 +582,26 @@ fn performAdaptiveReorder(shared: *SharedContext) void {
     // Check if order actually changed
     var changed = false;
     for (0..n) |i| {
-        if (buf_b[i] != atoms_a[i]) {
+        if (dst[i] != src[i]) {
             changed = true;
             break;
         }
     }
 
-    if (changed) {
-        printAdaptiveReorderDiag(atoms_a, buf_b[0..n], shared.constraints, shared.aliases, eval_snap[0..shared.constraints.len], fail_snap[0..shared.constraints.len]);
-    }
+    const threshold = @atomicLoad(u64, &shared.adaptive_next_threshold, .monotonic);
 
-    // Publish new order (release ensures buf_b contents visible before flag)
-    @atomicStore(u8, &shared.active_conj_buf, 1, .release);
-    @atomicStore(u8, &shared.adaptive_state, 2, .release);
+    if (changed) {
+        printAdaptiveReorderDiag(src, dst, shared.constraints, shared.aliases, eval_snap[0..num_constraints], fail_snap[0..num_constraints], threshold);
+        // Flip active buffer and schedule next round
+        @atomicStore(u8, &shared.active_conj_buf, if (active == 1) @as(u8, 0) else @as(u8, 1), .release);
+        @atomicStore(u64, &shared.adaptive_next_threshold, @min(threshold * 4, 1_000_000), .release);
+        @atomicStore(u8, &shared.adaptive_state, 0, .release); // keep learning
+    } else {
+        // Converged — stop learning
+        const stderr = std.io.getStdErr().writer();
+        stderr.print("adaptive reorder: converged after {d} seeds\n", .{threshold}) catch {};
+        @atomicStore(u8, &shared.adaptive_state, 2, .release);
+    }
 }
 
 fn printAdaptiveReorderDiag(
@@ -599,9 +611,10 @@ fn printAdaptiveReorderDiag(
     aliases: []const usize,
     eval_counts: []const u64,
     fail_counts: []const u64,
+    threshold: u64,
 ) void {
     const stderr = std.io.getStdErr().writer();
-    stderr.print("adaptive reorder: learned from {d} seeds\n", .{ADAPTIVE_LEARN_SEEDS}) catch return;
+    stderr.print("adaptive reorder: learned from {d} seeds\n", .{threshold}) catch return;
     for (new_order, 0..) |idx, i| {
         const alias_idx = aliases[idx];
         const label = constraints[alias_idx].label();
@@ -934,8 +947,6 @@ pub fn main() !void {
                 .radius2 = @as(i64, parsed.radius) * parsed.radius,
                 .structure_c = st.toC(),
                 .cfg = null,
-                .cfg_raw = null,
-                .pos_mode = .generic,
                 .regions = &.{},
             } });
             try structure_constraint_ids.append(constraints.items.len - 1);
@@ -1056,8 +1067,6 @@ pub fn main() !void {
             },
             .structure => |*req| {
                 req.cfg = bedrock.getStructureConfig(req.structure, mc);
-                req.cfg_raw = bedrock.getStructureConfigRaw(req.structure_c, mc);
-                req.pos_mode = bedrock.posModeForStructure(req.structure_c);
                 if (anchor_override) |anchor| {
                     req.regions = try buildStructureRegionsForAnchor(allocator, anchor, req.*);
                 }

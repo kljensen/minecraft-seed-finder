@@ -1,6 +1,6 @@
 # Minecraft Seed Finder
 
-A fast Minecraft Bedrock seed finder written in Zig. Searches seeds by biome and
+A fast Minecraft Java Edition seed finder written in Zig. Searches seeds by biome and
 structure constraints using a pure-Zig port of
 [cubiomes](https://github.com/Cubitect/cubiomes).
 

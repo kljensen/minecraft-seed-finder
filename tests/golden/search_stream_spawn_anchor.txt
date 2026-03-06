@@ -1,9 +1,9 @@
-seed=2 spawn=(-32,0) anchor=(-32,0) score=2.728 matched=2/2 diagnostics=b1=ok(547)@82.5;s1=ok@430.1
-seed=6 spawn=(-80,-224) anchor=(-80,-224) score=3.198 matched=2/2 diagnostics=b1=ok(211)@43.1;s1=ok@293.5
-seed=9 spawn=(0,0) anchor=(0,0) score=3.072 matched=2/2 diagnostics=b1=ok(5237)@0.0;s1=ok@463.9
-seed=12 spawn=(-32,-32) anchor=(-32,-32) score=3.401 matched=2/2 diagnostics=b1=ok(5527)@0.0;s1=ok@299.5
-seed=15 spawn=(0,0) anchor=(0,0) score=3.502 matched=2/2 diagnostics=b1=ok(2110)@0.0;s1=ok@249.2
-seed=17 spawn=(32,-32) anchor=(32,-32) score=2.739 matched=2/2 diagnostics=b1=ok(2008)@61.2;s1=ok@477.5
-seed=18 spawn=(-80,144) anchor=(-80,144) score=3.177 matched=2/2 diagnostics=b1=ok(1321)@52.2;s1=ok@281.0
-seed=19 spawn=(0,0) anchor=(0,0) score=2.871 matched=2/2 diagnostics=b1=ok(1547)@81.0;s1=ok@362.2
-summary: found=8 tested=20 start_seed=0 end_seed=18
+seed=2 spawn=(-32,0) anchor=(-32,0) score=2.682 matched=2/2 diagnostics=b1=ok(547)@82.5;s1=ok@452.8
+seed=12 spawn=(-32,-32) anchor=(-32,-32) score=3.595 matched=2/2 diagnostics=b1=ok(5527)@0.0;s1=ok@202.4
+seed=15 spawn=(0,0) anchor=(0,0) score=3.227 matched=2/2 diagnostics=b1=ok(2110)@0.0;s1=ok@386.7
+seed=16 spawn=(-176,-304) anchor=(-176,-304) score=3.155 matched=2/2 diagnostics=b1=ok(1276)@17.9;s1=ok@377.6
+seed=17 spawn=(32,-32) anchor=(32,-32) score=2.904 matched=2/2 diagnostics=b1=ok(2008)@61.2;s1=ok@395.2
+seed=18 spawn=(-80,144) anchor=(-80,144) score=3.365 matched=2/2 diagnostics=b1=ok(1321)@52.2;s1=ok@187.3
+seed=19 spawn=(0,0) anchor=(0,0) score=2.667 matched=2/2 diagnostics=b1=ok(1547)@81.0;s1=ok@464.0
+seed=20 spawn=(0,0) anchor=(0,0) score=3.213 matched=2/2 diagnostics=b1=ok(2919)@16.5;s1=ok@352.4
+summary: found=8 tested=21 start_seed=0 end_seed=19

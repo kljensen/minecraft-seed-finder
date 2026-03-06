@@ -73,13 +73,6 @@ pub const StructureConfig = struct {
     separation: i32,
 };
 
-pub const StructurePosMode = enum {
-    generic,
-    feature,
-    large,
-    mc_1_17_split,
-};
-
 fn normalizeName(allocator: std.mem.Allocator, raw: []const u8) ![]u8 {
     var out = try allocator.alloc(u8, raw.len);
     for (raw, 0..) |ch, i| {
@@ -104,7 +97,7 @@ pub fn parseStructure(allocator: std.mem.Allocator, name: []const u8) !?Structur
 
 pub fn getStructureConfig(structure: Structure, mc: i32) ?StructureConfig {
     var raw: c.StructureConfig = undefined;
-    if (!c.getBedrockStructureConfig(structure.toC(), mc, &raw)) return null;
+    if (c.getStructureConfig(structure.toC(), mc, &raw) == 0) return null;
     return .{
         .spacing = raw.regionSize,
         .separation = raw.regionSize - raw.chunkRange,
@@ -113,57 +106,16 @@ pub fn getStructureConfig(structure: Structure, mc: i32) ?StructureConfig {
 
 pub fn getStructureConfigRaw(structure_c: c_int, mc: i32) ?c.StructureConfig {
     var raw: c.StructureConfig = undefined;
-    if (!c.getBedrockStructureConfig(structure_c, mc, &raw)) return null;
+    if (c.getStructureConfig(structure_c, mc, &raw) == 0) return null;
     return raw;
-}
-
-pub fn posModeForStructure(structure_c: c_int) StructurePosMode {
-    return switch (structure_c) {
-        c.Desert_Pyramid, c.Igloo, c.Jungle_Pyramid, c.Ruined_Portal, c.Swamp_Hut => .feature,
-        c.Ancient_City, c.Mansion, c.Monument, c.Outpost, c.Treasure, c.Village => .large,
-        c.Ocean_Ruin, c.Shipwreck => .mc_1_17_split,
-        else => .generic,
-    };
 }
 
 pub fn getStructurePos(structure: Structure, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?Pos {
     return getStructurePosC(structure.toC(), mc, seed, reg_x, reg_z);
 }
 
-pub fn getStructurePosFast(
-    structure_c: c_int,
-    mc: i32,
-    seed: u64,
-    reg_x: i32,
-    reg_z: i32,
-    pos_mode: StructurePosMode,
-    cfg_raw: ?c.StructureConfig,
-) ?Pos {
-    const raw = cfg_raw orelse return getStructurePosC(structure_c, mc, seed, reg_x, reg_z);
-    var pos: c.Pos = undefined;
-
-    switch (pos_mode) {
-        .feature => {
-            pos = c.getBedrockFeaturePos(&raw, seed, reg_x, reg_z);
-            return .{ .x = pos.x, .z = pos.z };
-        },
-        .large => {
-            pos = c.getBedrockLargeStructurePos(&raw, seed, reg_x, reg_z);
-            return .{ .x = pos.x, .z = pos.z };
-        },
-        .mc_1_17_split => {
-            pos = if (mc <= c.MC_1_17)
-                c.getBedrockLargeStructurePos(&raw, seed, reg_x, reg_z)
-            else
-                c.getBedrockFeaturePos(&raw, seed, reg_x, reg_z);
-            return .{ .x = pos.x, .z = pos.z };
-        },
-        .generic => return getStructurePosC(structure_c, mc, seed, reg_x, reg_z),
-    }
-}
-
 pub fn getStructurePosC(structure_c: c_int, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?Pos {
     var pos: c.Pos = undefined;
-    if (!c.getBedrockStructurePos(structure_c, mc, seed, reg_x, reg_z, &pos)) return null;
+    if (c.getStructurePos(structure_c, mc, seed, reg_x, reg_z, &pos) == 0) return null;
     return .{ .x = pos.x, .z = pos.z };
 }
