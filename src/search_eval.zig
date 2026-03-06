@@ -35,7 +35,7 @@ const BiomeTreeDef = struct {
     len: u32,
 };
 
-fn selectBiomeTree(mc: i32) BiomeTreeDef {
+pub fn selectBiomeTree(mc: i32) BiomeTreeDef {
     if (mc >= c.MC_1_21_WD) {
         return .{ .params = &c.btree21wd_param, .nodes = &c.btree21wd_nodes, .len = c.btree21wd_nodes.len };
     }
@@ -99,32 +99,16 @@ pub fn precomputeBiomeClimateBounds(mc: i32, biome_id: i32) ?BiomeClimateBounds 
     return out;
 }
 
-inline fn npBit(dim: usize) u6 {
+pub inline fn npBit(dim: usize) u6 {
     return @as(u6, 1) << @as(std.math.Log2Int(u6), @intCast(dim));
 }
 
-fn isBiomeFeasible(bounds: BiomeClimateBounds, np_values: [6]i64, np_known: u6) bool {
+pub fn isBiomeFeasible(bounds: BiomeClimateBounds, np_values: [6]i64, np_known: u6) bool {
     if (!bounds.valid) return true;
-    if (!bounds.leaf_overflow and bounds.leaf_count > 0) {
-        var leaf_i: usize = 0;
-        while (leaf_i < bounds.leaf_count) : (leaf_i += 1) {
-            const leaf = bounds.leaves[leaf_i];
-            var matches = true;
-            for (0..6) |dim| {
-                const bit = npBit(dim);
-                if ((np_known & bit) == 0) continue;
-                const v = np_values[dim];
-                const lo = @as(i64, leaf[dim].lo);
-                const hi = @as(i64, leaf[dim].hi);
-                if (v < lo or v > hi) {
-                    matches = false;
-                    break;
-                }
-            }
-            if (matches) return true;
-        }
-        return false;
-    }
+    // Use union bounds only. Per-leaf checks are too strict because the biome
+    // tree uses nearest-neighbor (minimum L2 distance), not exact containment.
+    // A point between two leaves (e.g. depth=6760 when leaves have depth=0 or
+    // depth=10000) can still be assigned to this biome as the closest match.
     for (0..6) |dim| {
         const bit = npBit(dim);
         if ((np_known & bit) == 0) continue;
@@ -136,7 +120,7 @@ fn isBiomeFeasible(bounds: BiomeClimateBounds, np_values: [6]i64, np_known: u6) 
     return true;
 }
 
-fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: BiomeClimateBounds) i32 {
+pub fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: BiomeClimateBounds) i32 {
     const bn = &g.unnamed_0.unnamed_1.bn;
     var np: [6]i64 = undefined;
     var np_known: u6 = 0;
