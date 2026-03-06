@@ -1,6 +1,11 @@
 const std = @import("std");
 const c = @import("cubiomes_port.zig");
 
+pub const Edition = enum {
+    java,
+    bedrock,
+};
+
 pub const Pos = struct {
     x: i32,
     z: i32,
@@ -95,27 +100,31 @@ pub fn parseStructure(allocator: std.mem.Allocator, name: []const u8) !?Structur
     return null;
 }
 
-pub fn getStructureConfig(structure: Structure, mc: i32) ?StructureConfig {
+pub fn getStructureConfig(edition: Edition, structure: Structure, mc: i32) ?StructureConfig {
     var raw: c.StructureConfig = undefined;
-    if (c.getStructureConfig(structure.toC(), mc, &raw) == 0) return null;
+    switch (edition) {
+        .java => {
+            if (c.getStructureConfig(structure.toC(), mc, &raw) == 0) return null;
+        },
+        .bedrock => {
+            if (!c.getBedrockStructureConfig(structure.toC(), mc, &raw)) return null;
+        },
+    }
     return .{
         .spacing = raw.regionSize,
         .separation = raw.regionSize - raw.chunkRange,
     };
 }
 
-pub fn getStructureConfigRaw(structure_c: c_int, mc: i32) ?c.StructureConfig {
-    var raw: c.StructureConfig = undefined;
-    if (c.getStructureConfig(structure_c, mc, &raw) == 0) return null;
-    return raw;
-}
-
-pub fn getStructurePos(structure: Structure, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?Pos {
-    return getStructurePosC(structure.toC(), mc, seed, reg_x, reg_z);
-}
-
-pub fn getStructurePosC(structure_c: c_int, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?Pos {
+pub fn getStructurePos(edition: Edition, structure_c: c_int, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?Pos {
     var pos: c.Pos = undefined;
-    if (c.getStructurePos(structure_c, mc, seed, reg_x, reg_z, &pos) == 0) return null;
+    switch (edition) {
+        .java => {
+            if (c.getStructurePos(structure_c, mc, seed, reg_x, reg_z, &pos) == 0) return null;
+        },
+        .bedrock => {
+            if (!c.getBedrockStructurePos(structure_c, mc, seed, reg_x, reg_z, &pos)) return null;
+        },
+    }
     return .{ .x = pos.x, .z = pos.z };
 }

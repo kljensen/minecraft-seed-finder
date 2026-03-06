@@ -355,6 +355,7 @@ fn printUsage(writer: anytype) !void {
         "Usage:\n" ++
             "  seed-finder --count <N> [options]\n\n" ++
             "Options:\n" ++
+            "  --edition <java|bedrock>             Game edition (default: bedrock)\n" ++
             "  --version <1.18|1.19|1.20|1.21.1>   Minecraft version (default: 1.21.1)\n" ++
             "  --start-seed <u64>                   First seed to test (default: 0)\n" ++
             "  --max-seed <u64>                     Stop scanning after this seed\n" ++
@@ -803,6 +804,7 @@ pub fn main() !void {
     _ = args.next();
 
     var mc: i32 = c.MC_1_21_1;
+    var edition: bedrock.Edition = .bedrock;
     var start_seed: u64 = 0;
     var max_seed: u64 = std.math.maxInt(u64);
     var count: usize = 0;
@@ -845,6 +847,16 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "--version")) {
             const v = args.next() orelse return error.InvalidArguments;
             mc = parseVersion(v) orelse return error.InvalidVersion;
+        } else if (std.mem.eql(u8, arg, "--edition")) {
+            const v = args.next() orelse return error.InvalidArguments;
+            if (std.mem.eql(u8, v, "java")) {
+                edition = .java;
+            } else if (std.mem.eql(u8, v, "bedrock")) {
+                edition = .bedrock;
+            } else {
+                std.debug.print("error: unknown edition '{s}' (expected 'java' or 'bedrock')\n", .{v});
+                return error.InvalidArguments;
+            }
         } else if (std.mem.eql(u8, arg, "--start-seed")) {
             const s = args.next() orelse return error.InvalidArguments;
             start_seed = try std.fmt.parseInt(u64, s, 10);
@@ -1066,7 +1078,7 @@ pub fn main() !void {
                 }
             },
             .structure => |*req| {
-                req.cfg = bedrock.getStructureConfig(req.structure, mc);
+                req.cfg = bedrock.getStructureConfig(edition, req.structure, mc);
                 if (anchor_override) |anchor| {
                     req.regions = try buildStructureRegionsForAnchor(allocator, anchor, req.*);
                 }
@@ -1166,11 +1178,10 @@ pub fn main() !void {
     defer allocator.free(aliases);
     const structure_bbox_prune = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_STRUCTURE_BBOX_PRUNE");
     const conjunctive_cost_order = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_CONJUNCTIVE_COST_ORDER");
-    const structure_fast_pos = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_STRUCTURE_FAST_POS");
     const biome_climate_early_exit = !envFlagEnabled(allocator, "SEED_FINDER_DISABLE_BIOME_CLIMATE_EARLY_EXIT");
     search_eval.setOptimizationToggles(structure_bbox_prune, conjunctive_cost_order);
-    search_eval.setStructureFastPosEnabled(structure_fast_pos);
     search_eval.setBiomeClimateEarlyExitEnabled(biome_climate_early_exit);
+    search_eval.setEdition(edition);
     if (conjunctive_atoms) |atoms| {
         conjunctive_eval_atoms = try canonicalizeConjunctiveAtomPlan(allocator, atoms, aliases);
         if (conjunctive_eval_atoms) |eval_atoms| {

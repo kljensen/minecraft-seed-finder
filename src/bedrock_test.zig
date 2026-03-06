@@ -13,7 +13,7 @@ const Vector = struct {
 
 test "bedrock structure positions match reference vectors" {
     const allocator = std.testing.allocator;
-    const sanity = bedrock.getStructurePos(.village, 22, 8675309, 0, 0) orelse unreachable;
+    const sanity = bedrock.getStructurePos(.bedrock, bedrock.Structure.village.toC(), 22, 8675309, 0, 0) orelse unreachable;
     try std.testing.expectEqual(@as(i32, 120), sanity.x);
     try std.testing.expectEqual(@as(i32, 248), sanity.z);
 
@@ -27,7 +27,7 @@ test "bedrock structure positions match reference vectors" {
         const st = try bedrock.parseStructure(allocator, v.structure) orelse {
             std.debug.panic("unknown structure in vector: {s}", .{v.structure});
         };
-        const pos = bedrock.getStructurePos(st, v.version, v.seed, v.reg_x, v.reg_z) orelse {
+        const pos = bedrock.getStructurePos(.bedrock, st.toC(), v.version, v.seed, v.reg_x, v.reg_z) orelse {
             std.debug.panic("no position for structure {s}", .{v.structure});
         };
         try std.testing.expectEqual(v.x, pos.x);

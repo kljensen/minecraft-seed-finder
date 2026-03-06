@@ -66,16 +66,16 @@ check_format_consistency() {
 }
 
 echo "=== Golden file checks ==="
-check_golden "stream text" tests/golden/search_stream_spawn_anchor.txt \
-    --version 1.21.1 --start-seed 0 --max-seed 500 --count 8 --format text \
+check_golden "stream text (java)" tests/golden/search_stream_spawn_anchor.txt \
+    --edition java --version 1.21.1 --start-seed 0 --max-seed 500 --count 8 --format text \
     --require-biome "plains:4@200" --require-structure "village:500" --where "b1 and s1"
 
-check_golden "ranked jsonl" tests/golden/search_ranked_jsonl.txt \
-    --version 1.21.1 --start-seed 0 --max-seed 500 --count 8 --ranked --top-k 6 --format jsonl \
+check_golden "ranked jsonl (java)" tests/golden/search_ranked_jsonl.txt \
+    --edition java --version 1.21.1 --start-seed 0 --max-seed 500 --count 8 --ranked --top-k 6 --format jsonl \
     --require-biome "plains:4@200" --require-structure "village:500" --where "b1 and s1"
 
-check_golden "stream csv" tests/golden/search_stream_spawn_anchor.csv \
-    --version 1.21.1 --start-seed 0 --max-seed 500 --count 8 --format csv \
+check_golden "stream csv (java)" tests/golden/search_stream_spawn_anchor.csv \
+    --edition java --version 1.21.1 --start-seed 0 --max-seed 500 --count 8 --format csv \
     --require-biome "plains:4@200" --require-structure "village:500" --where "b1 and s1"
 
 echo ""

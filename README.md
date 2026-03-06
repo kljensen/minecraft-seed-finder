@@ -1,8 +1,8 @@
 # Minecraft Seed Finder
 
-A fast Minecraft Java Edition seed finder written in Zig. Searches seeds by biome and
-structure constraints using a pure-Zig port of
-[cubiomes](https://github.com/Cubitect/cubiomes).
+A fast Minecraft seed finder written in Zig, supporting both **Bedrock** and
+**Java** editions. Searches seeds by biome and structure constraints using a
+pure-Zig port of [cubiomes](https://github.com/Cubitect/cubiomes).
 
 Find seeds with specific biomes near each other, structures within walking
 distance, or complex combinations of both — then rank them by how well they
@@ -63,6 +63,7 @@ Operators: `and`, `or`, `not` (aliases `&&`, `||`, `!`). Parentheses for groupin
 ### Search options
 
 ```
+--edition <java|bedrock>             Game edition (default: bedrock)
 --version <1.18|1.19|1.20|1.21.1>   Minecraft version (default: 1.21.1)
 --start-seed <u64>                   first seed to test (default: 0)
 --max-seed <u64>                     stop after this seed

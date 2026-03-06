@@ -543,8 +543,8 @@ pub const EvalTelemetry = struct {
 var active_eval_telemetry: ?*EvalTelemetry = null;
 var structure_bbox_prune_enabled = true;
 var conjunctive_cost_order_enabled = true;
-var structure_fast_pos_enabled = true;
 var biome_climate_early_exit_enabled = true;
+var active_edition: bedrock.Edition = .bedrock;
 
 pub fn setEvalTelemetry(telemetry: ?*EvalTelemetry) void {
     active_eval_telemetry = telemetry;
@@ -561,8 +561,8 @@ pub fn setOptimizationToggles(structure_bbox_prune: bool, conjunctive_cost_order
     conjunctive_cost_order_enabled = conjunctive_cost_order;
 }
 
-pub fn setStructureFastPosEnabled(enabled: bool) void {
-    structure_fast_pos_enabled = enabled;
+pub fn setEdition(edition: bedrock.Edition) void {
+    active_edition = edition;
 }
 
 pub fn setBiomeClimateEarlyExitEnabled(enabled: bool) void {
@@ -570,7 +570,7 @@ pub fn setBiomeClimateEarlyExitEnabled(enabled: bool) void {
 }
 
 inline fn getStructurePosForReq(req: StructureReq, mc: i32, seed: u64, reg_x: i32, reg_z: i32) ?bedrock.Pos {
-    return bedrock.getStructurePosC(req.structure_c, mc, seed, reg_x, reg_z);
+    return bedrock.getStructurePos(active_edition, req.structure_c, mc, seed, reg_x, reg_z);
 }
 
 fn chunkRange(cfg: bedrock.StructureConfig) i32 {
