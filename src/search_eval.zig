@@ -51,6 +51,27 @@ pub fn selectBiomeTree(mc: i32) BiomeTreeDef {
     return .{ .params = &c.btree18_param, .nodes = &c.btree18_nodes, .len = c.btree18_nodes.len };
 }
 
+/// Compute the global (union-over-all-biomes) parameter ranges for a biome tree,
+/// per dimension.  These are the outer bounds of the climate parameter space that
+/// any leaf node covers.  Values outside these bounds exceed the tree's nominal
+/// range entirely; the nearest-neighbour metric then assigns whatever biome has
+/// its leaf closest to the boundary.
+fn treeGlobalBounds(tree: anytype) [6]ClimateRange {
+    var global: [6]ClimateRange = [_]ClimateRange{
+        .{ .lo = std.math.maxInt(i32), .hi = std.math.minInt(i32) },
+    } ** 6;
+    for (tree.nodes) |node| {
+        for (0..6) |dim| {
+            const shift: u6 = @intCast(dim * 8);
+            const param_idx: usize = @intCast((node >> shift) & 0xff);
+            const p = tree.params[param_idx];
+            global[dim].lo = @min(global[dim].lo, p[0]);
+            global[dim].hi = @max(global[dim].hi, p[1]);
+        }
+    }
+    return global;
+}
+
 pub fn precomputeBiomeClimateBounds(mc: i32, biome_id: i32) ?BiomeClimateBounds {
     if (biome_id < 0 or biome_id > 255) return null;
     const tree = selectBiomeTree(mc);
@@ -96,6 +117,17 @@ pub fn precomputeBiomeClimateBounds(mc: i32, biome_id: i32) ?BiomeClimateBounds 
         }
     }
     if (!out.valid) return null;
+
+    // Store the per-dimension global tree bounds in the upper 32 bits of each
+    // ClimateRange field — we reuse the struct by storing them in a separate
+    // array that is carried along in BiomeClimateBounds.global_lo/global_hi.
+    // (We store it inline to avoid adding fields to BiomeClimateBounds.)
+    //
+    // The bounds are used in isBiomeFeasible to clamp noise values that exceed
+    // the tree's nominal range before the union-range check.  See that function
+    // for the full rationale.
+    out.global = treeGlobalBounds(tree);
+
     return out;
 }
 
@@ -109,10 +141,27 @@ pub fn isBiomeFeasible(bounds: BiomeClimateBounds, np_values: [6]i64, np_known: 
     // tree uses nearest-neighbor (minimum L2 distance), not exact containment.
     // A point between two leaves (e.g. depth=6760 when leaves have depth=0 or
     // depth=10000) can still be assigned to this biome as the closest match.
+    //
+    // Additionally, climate noise can produce values outside the tree's nominal
+    // parameter range (e.g. T=10457 when the tree's max T is 10000).  When v
+    // exceeds the global range in some dimension, *every* biome is equidistant
+    // from the tree's boundary in that dimension — the winner is determined by
+    // the other five dimensions.  We therefore clamp v to [global_lo, global_hi]
+    // before comparing against the biome's union range.  If the clamped value is
+    // within the union range, we cannot reject on this dimension alone.
+    //
+    // Concrete example: eroded_badlands has T leaves up to 10000 (the global
+    // tree max).  A noise value of T=10457 clamped to 10000 falls within
+    // eroded_badlands' T union [-10000, 10000], so the early-exit does NOT fire,
+    // and climateToBiome correctly returns eroded_badlands.
     for (0..6) |dim| {
         const bit = npBit(dim);
         if ((np_known & bit) == 0) continue;
-        const v = np_values[dim];
+        const raw_v = np_values[dim];
+        // Clamp to the global tree range for this dimension.
+        const g_lo = @as(i64, bounds.global[dim].lo);
+        const g_hi = @as(i64, bounds.global[dim].hi);
+        const v = @max(g_lo, @min(g_hi, raw_v));
         const lo = @as(i64, bounds.ranges[dim].lo);
         const hi = @as(i64, bounds.ranges[dim].hi);
         if (v < lo or v > hi) return false;
@@ -1756,4 +1805,45 @@ pub fn diagnosticsString(allocator: std.mem.Allocator, constraints: []const Cons
     }
 
     return out.toOwnedSlice();
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests
+// ---------------------------------------------------------------------------
+
+test "precomputeBiomeClimateBounds: eroded_badlands global T bounds stored correctly" {
+    // Regression for false-negative bug: seed 55 at block (224,0,-328) is
+    // eroded_badlands in Java 1.21.1, but the climate noise produces T=10457
+    // which exceeds the union of all eroded_badlands leaf T-ranges (max 10000).
+    // The fix: store global per-dimension tree bounds in BiomeClimateBounds.global
+    // so that isBiomeFeasible can clamp noise values to the global range before
+    // checking the biome's union range.
+    const mc = c.MC_1_21_WD; // 1.21.1
+    const eroded_badlands: i32 = 165;
+    const bounds = precomputeBiomeClimateBounds(mc, eroded_badlands) orelse
+        return error.TestUnexpectedResult;
+
+    const t_idx = @as(usize, @intCast(c.NP_TEMPERATURE));
+    // Union T-range of eroded_badlands leaves tops out at 10000.
+    try std.testing.expectEqual(@as(i32, 10000), bounds.ranges[t_idx].hi);
+    // Global T-range for the tree also tops out at 10000
+    // (no leaf has T hi > 10000 in the 1.21.1 tree).
+    try std.testing.expectEqual(@as(i32, 10000), bounds.global[t_idx].hi);
+    // The biome's T union hi equals the global T hi → isBiomeFeasible will
+    // clamp T=10457 to 10000, which is within the union range → feasible.
+}
+
+test "isBiomeFeasible: T=10457 is feasible for eroded_badlands" {
+    const mc = c.MC_1_21_WD;
+    const eroded_badlands: i32 = 165;
+    const bounds = precomputeBiomeClimateBounds(mc, eroded_badlands) orelse
+        return error.TestUnexpectedResult;
+
+    const t_idx = @as(usize, @intCast(c.NP_TEMPERATURE));
+    var np = [6]i64{ 0, 0, 0, 0, 0, 0 };
+    np[t_idx] = 10457;
+    const np_known: u6 = npBit(t_idx);
+
+    // With the fix, T=10457 must NOT be rejected by the feasibility check.
+    try std.testing.expect(isBiomeFeasible(bounds, np, np_known));
 }

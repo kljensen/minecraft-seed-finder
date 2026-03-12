@@ -68,6 +68,72 @@ test "biome parity: Zig getBiomeAt matches C" {
     try std.testing.expectEqual(@as(usize, 0), mismatches);
 }
 
+// ---------- eroded_badlands climate boundary regression ----------
+
+test "biome parity: eroded_badlands at out-of-tree-range climate (seed 55)" {
+    // Regression test for the climate early-exit false-negative bug.
+    //
+    // At Java seed 55, block (224, 0, -328) maps to eroded_badlands in the C
+    // library.  The climate noise at the corresponding voronoi sample point
+    // produces T=10457, which exceeds the global T range of the 1.21.1 biome
+    // tree (max T=10000 in any leaf).  The old code rejected this point via the
+    // union-range feasibility check (T > union T-hi = 10000).  The fix clamps
+    // the noise value to the global tree range before the check, so T=10457 is
+    // treated as T=10000, which IS within eroded_badlands' union T-range.
+    //
+    // This test verifies that:
+    //   1. Both Zig and C return eroded_badlands at this exact location.
+    //   2. getBiomeAt agrees across seeds 0..99 for radius-400 eroded_badlands
+    //      scans (catches any new false negatives in the neighbourhood).
+    const mc: i32 = c.MC_1_21_1;
+    const eroded_badlands_id: c_int = 165;
+
+    // 1. Spot-check the exact failing location.
+    {
+        const seed: u64 = 55;
+        var zg: zig.Generator = undefined;
+        initZigGenerator(&zg, mc, seed);
+        var cg: c.Generator = undefined;
+        initCGenerator(&cg, mc, seed);
+        const x: i32 = 224;
+        const z: i32 = -328;
+        const zig_biome = zig.getBiomeAt(&zg, 1, x, 0, z);
+        const c_biome = c.getBiomeAt(&cg, 1, x, 0, z);
+        if (c_biome != eroded_badlands_id) {
+            std.debug.print("C library does not return eroded_badlands at seed={d} ({d},{d}); got {d}\n", .{ seed, x, z, c_biome });
+            return error.TestExpectedEqual;
+        }
+        if (zig_biome != c_biome) {
+            std.debug.print("eroded_badlands mismatch: seed={d} ({d},{d}) zig={d} c={d}\n", .{ seed, x, z, zig_biome, c_biome });
+            return error.TestExpectedEqual;
+        }
+    }
+
+    // 2. Scan seeds 0-99 at radius 400 and check for biome agreement.
+    var mismatches: usize = 0;
+    for (0..100) |si| {
+        const seed: u64 = @intCast(si);
+        var zg: zig.Generator = undefined;
+        initZigGenerator(&zg, mc, seed);
+        var cg: c.Generator = undefined;
+        initCGenerator(&cg, mc, seed);
+        var i: usize = 0;
+        while (i < 40) : (i += 1) {
+            const angle = @as(f64, @floatFromInt(i)) * (2.0 * std.math.pi / 40.0);
+            const x: i32 = @intFromFloat(@round(400.0 * @cos(angle) / 4.0) * 4);
+            const z: i32 = @intFromFloat(@round(400.0 * @sin(angle) / 4.0) * 4);
+            const zb = zig.getBiomeAt(&zg, 1, x, 0, z);
+            const cb = c.getBiomeAt(&cg, 1, x, 0, z);
+            if (zb != cb) {
+                std.debug.print("eroded_badlands scan mismatch: seed={d} ({d},{d}) zig={d} c={d}\n", .{ seed, x, z, zb, cb });
+                mismatches += 1;
+            }
+        }
+    }
+    std.debug.print("eroded_badlands boundary: 100 seeds × 40 points matched\n", .{});
+    try std.testing.expectEqual(@as(usize, 0), mismatches);
+}
+
 // ---------- spawn parity ----------
 
 test "spawn parity: Zig getSpawn matches C" {

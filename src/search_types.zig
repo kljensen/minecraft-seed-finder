@@ -27,6 +27,11 @@ pub const BiomeClimateBounds = struct {
     leaves: [max_biome_climate_leaves][6]ClimateRange = undefined,
     leaf_count: u16 = 0,
     leaf_overflow: bool = false,
+    /// Global per-dimension bounds for the entire biome tree (union over all
+    /// biomes/leaves).  Noise values outside this range exceed the tree's
+    /// nominal parameter space; isBiomeFeasible clamps to these bounds before
+    /// comparing against the biome's own union ranges.
+    global: [6]ClimateRange = [_]ClimateRange{.{ .lo = -12000, .hi = 12000 }} ** 6,
 };
 
 pub const StructureRegion = struct {
