@@ -9,3 +9,4 @@ tmp/
 
 # Local assistant tooling state
 .claude/
+src/cubiomes_port_noexport.zig
