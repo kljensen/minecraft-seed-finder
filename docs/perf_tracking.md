@@ -320,3 +320,39 @@ Notes:
 
 - External behavior remains unchanged; this pass only removes redundant compare-path work and hardens benchmark consistency.
 - Differential stream parity and strict compare-only checks remained mismatch-free.
+
+---
+
+## Known limitation: climate early-exit false rejections for some biomes
+
+**Discovered**: during benchmark verification (2026-03-12)  
+**Affected biome confirmed**: `eroded_badlands` (biome ID 165)  
+**Symptom**: Zig tool misses seeds that C reference (`bench/c_reference.c`) correctly finds.
+
+**Root cause**: `precomputeBiomeClimateBounds` builds early-exit bounds as the union of all
+biome-tree leaf parameter ranges for the target biome. The biome tree uses a nearest-neighbour
+distance metric, so a point can be assigned to biome X even when its climate parameters fall
+*outside* every X-leaf's nominal range (the X leaf is still the closest). Those points are
+wrongly rejected by the early-exit, producing false negatives.
+
+**Reproduction**:
+```sh
+# Zig finds 4 seeds; C reference finds 5 (seed 55 is missing from Zig)
+./zig-out/bin/seed-finder --edition java --version 1.21.1 \
+  --count 5 --anchor 0:0 --start-seed 0 --max-seed 500 \
+  --require-biome "eroded_badlands:1@400" --format csv
+
+bench/c_reference --count 5 --anchor 0:0 --max-seed 500 \
+  --require-biome "eroded_badlands:1@400"
+```
+
+**Impact**: biome-only queries for `eroded_badlands` (and potentially other biomes near
+climate-space boundaries) may silently miss some matching seeds. Combined queries with
+structure pre-filtering are unaffected for the structure portion; the biome portion may
+miss seeds.
+
+**Fix direction**: expand the early-exit bounds to cover all points where nearest-neighbour
+assigns the biome, not just points inside a leaf's nominal range. One approach: after
+computing the union, dilate each bound dimension by the observed maximum "out-of-range win
+distance" for that biome. Another: for affected biomes, fall back to full `climateToBiome`
+without early-exit (accepting the performance cost).

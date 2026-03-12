@@ -183,29 +183,25 @@ structure region math) but without the Zig optimisations: it calls cubiomes'
 parameters each time), and checks biome constraints before structure constraints
 (naive ordering). Reproduce with `sh scripts/bench_vs_c_ref.sh`.
 
-Benchmarks anchored at (0,0), single-threaded, Java edition, MC 1.21.1 on
-Apple M1 Max. Both tools find identical seeds.
+These benchmark queries match the Example seeds section above. Anchored at
+(0,0), single-threaded, Java edition, MC 1.21.1 on Apple M1 Max. Both tools
+find identical seeds.
 
 | Query | C reference | seed-finder | Speedup |
 |-------|-------------|-------------|---------|
-| `cherry_grove:1@300` (500 seeds) | 21.8s | 21.2s | **1.03x** |
-| `flower_forest:5@500` + `windswept_hills:5@500` (500 seeds) | 66.6s | 60.8s | **1.10x** |
-| `cherry_grove:1@300` + `village:500` (first 5 matches) | 5.4s | 2.8s | **1.93x** |
+| `cherry_grove:1@300` + `village:400` + `outpost:800` (first 5) |  19.7s |  1.9s | **10x** |
+| `ice_spikes:1@500`   + `village:400` + `outpost:600` (first 5) | 102.5s |  4.8s | **21x** |
 
-Two independent speedup sources:
+The large speedups come from two effects that multiply:
 
-**Climate early-exit** (~1.03–1.10x on biome-only queries): each biome grid
-point samples climate parameters one at a time; if an earlier parameter already
-rules out the target biome, remaining noise calls are skipped. The gain is
-modest for cherry grove because its continentalness and erosion bounds span a
-wide range — most rejections come from weirdness and temperature, which are
-checked later in the sequence.
+**Constraint reordering**: the tool evaluates cheap structure constraints first.
+Both queries require two structures, which together reject ~99% of seeds before
+any biome grid scan occurs. The C reference uses naive biome-first ordering,
+paying the full biome scan cost for every seed.
 
-**Constraint reordering** (~1.80x on the combined query): the tool checks the
-cheap structure constraint first. Seeds that fail the structure check (>97% of
-seeds in this query) skip the expensive biome scan entirely. The C reference
-uses the naive biome-first order, paying the full biome scan cost for every
-seed. Combined with climate early-exit, the two effects multiply to **1.93x**.
+**Climate early-exit**: for the ~1% of seeds that pass the structure checks, each
+biome grid point samples climate parameters one at a time and exits as soon as
+one parameter rules out the target biome, skipping the remaining noise calls.
 
 Structure-only queries use the same algorithm as cubiomes (region coordinate
 math + viability check) with no significant speed difference.

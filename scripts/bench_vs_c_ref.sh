@@ -121,22 +121,16 @@ BASE_C="--anchor 0:0 --version 1.21.1 --count 1000"
 echo "=== README benchmark queries ==="
 echo ""
 
-run_case "q1_cherry_grove" \
-    "cherry_grove:1@300  (seeds 0..499)" \
-    "$BASE_ZIG --start-seed 0 --max-seed 499 --require-biome 'cherry_grove:1@300'" \
-    "$BASE_C --max-seed 499 --require-biome 'cherry_grove:1@300'" \
-    ""
+run_case "q1_cherry_grove_2struct" \
+    "cherry_grove:1@300 + village:400 + outpost:800  (first 5 matches)" \
+    "--edition java --anchor 0:0 --version 1.21.1 --count 5 --start-seed 0 --max-seed 50000000 --require-biome 'cherry_grove:1@300' --require-structure 'village:400' --require-structure 'outpost:800'" \
+    "--anchor 0:0 --version 1.21.1 --count 5 --max-seed 50000000 --require-biome 'cherry_grove:1@300' --require-structure 'village:400' --require-structure 'outpost:800'" \
+    "23 322 383 395 447"
 
-run_case "q2_multi_biome" \
-    "flower_forest:5@500 + windswept_hills:5@500  (seeds 0..499)" \
-    "$BASE_ZIG --start-seed 0 --max-seed 499 --require-biome 'flower_forest:5@500' --require-biome 'windswept_hills:5@500'" \
-    "$BASE_C --max-seed 499 --require-biome 'flower_forest:5@500' --require-biome 'windswept_hills:5@500'" \
-    ""
-
-run_case "q3_biome_plus_structure" \
-    "cherry_grove:1@300 + village:500  (first 5 matches)" \
-    "--edition java --anchor 0:0 --version 1.21.1 --count 5 --start-seed 0 --max-seed 10000000 --require-biome 'cherry_grove:1@300' --require-structure 'village:500'" \
-    "--anchor 0:0 --version 1.21.1 --count 5 --max-seed 10000000 --require-biome 'cherry_grove:1@300' --require-structure 'village:500'" \
-    "18 23 35 95 116"
+run_case "q2_ice_spikes_2struct" \
+    "ice_spikes:1@500 + village:400 + outpost:600  (first 5 matches)" \
+    "--edition java --anchor 0:0 --version 1.21.1 --count 5 --start-seed 0 --max-seed 50000000 --require-biome 'ice_spikes:1@500' --require-structure 'village:400' --require-structure 'outpost:600'" \
+    "--anchor 0:0 --version 1.21.1 --count 5 --max-seed 50000000 --require-biome 'ice_spikes:1@500' --require-structure 'village:400' --require-structure 'outpost:600'" \
+    "24 282 383 661 808"
 
 echo "Results written to: $OUT_DIR/results.jsonl"
