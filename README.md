@@ -32,6 +32,56 @@ zig build run -Doptimize=ReleaseFast -- \
   --require-structure "village:400"
 ```
 
+## Example seeds
+
+All examples use Bedrock edition (the default), MC 1.21.1, random seed sampling.
+Results vary each run — these are real seeds from one run of each command.
+
+**Cherry grove with a village and outpost nearby** (~4 s single-thread)
+
+```sh
+seed-finder --version 1.21.1 --random --count 5 \
+  --require-biome "cherry_grove:1@300" \
+  --require-structure "village:400" \
+  --require-structure "outpost:800"
+```
+
+```
+seed=886 7242 5207 7709 2323  spawn=(0,0)     cherry_grove@222  village@283  outpost@678
+seed=-317 9391 2252 5228 0958 spawn=(16,0)    cherry_grove@159  village@305  outpost@482
+seed=-910 4215 7108 1848 7959 spawn=(-16,16)  cherry_grove@64   village@329  outpost@575
+```
+
+**Eroded badlands with a desert pyramid and village** (~1 s single-thread)
+
+```sh
+seed-finder --version 1.21.1 --random --count 5 \
+  --require-biome "eroded_badlands:1@400" \
+  --require-structure "desert_pyramid:600" \
+  --require-structure "village:400"
+```
+
+```
+seed=330 6219 5212 5272 4352  spawn=(0,0)    eroded_badlands@4    village@192  desert_pyramid@329
+seed=103 3528 9898 9757 7741  spawn=(-48,0)  eroded_badlands@179  village@204  desert_pyramid@125
+seed=502 1688 5111 1532 0908  spawn=(0,0)    eroded_badlands@46   village@283  desert_pyramid@402
+```
+
+**Jagged peaks with a village and outpost** (~10 s with `--threads auto`)
+
+```sh
+seed-finder --version 1.21.1 --random --count 5 --threads auto \
+  --require-biome "jagged_peaks:1@300" \
+  --require-structure "village:400" \
+  --require-structure "outpost:600"
+```
+
+```
+seed=390 9604 4403 0516 8472  spawn=(0,0)   jagged_peaks@78   village@254  outpost@264
+seed=-807 5115 1774 6899 7460 spawn=(0,0)   jagged_peaks@14   village@354  outpost@468
+seed=409 8352 6067 1576 6184  spawn=(0,0)   jagged_peaks@165  village@354  outpost@319
+```
+
 ## Usage
 
 ```
