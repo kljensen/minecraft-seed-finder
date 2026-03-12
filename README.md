@@ -124,27 +124,38 @@ just conformance               # full CLI conformance (requires C sources)
 
 ## Performance
 
-### vs cubiomes C
+### vs C reference
 
-Biome scanning is the expensive part of seed finding — each point requires
-sampling 7 Perlin noise octaves across 6 climate dimensions. The seed-finder
-optimizes this by checking climate parameters one at a time and skipping
-remaining noise calls when earlier parameters already rule out the target biome.
+The baseline is `bench/c_reference.c` — a C program with the exact same search
+algorithm (same circular biome grid, same impossible-fail short-circuit, same
+structure region math) but without the Zig optimisations: it calls cubiomes'
+`getBiomeAt()` unconditionally for every grid point (evaluating all 6 climate
+parameters each time), and checks biome constraints before structure constraints
+(naive ordering). Reproduce with `sh scripts/bench_vs_c_ref.sh`.
 
-Benchmarks anchored at the origin, single-threaded, MC 1.21.1 on Apple M4.
-Both tools find identical seeds.
+Benchmarks anchored at (0,0), single-threaded, Java edition, MC 1.21.1 on
+Apple M1 Max. Both tools find identical seeds.
 
-| Query | cubiomes C | seed-finder | Speedup |
-|-------|-----------|-------------|---------|
-| `cherry_grove:1@300` (500 seeds) | 28.7s | 21.0s | **1.37x** |
-| `flower_forest:5@500` + `windswept_hills:5@500` (500 seeds) | 78.6s | 61.1s | **1.29x** |
-| `cherry_grove:1@300` + `village:500` (first 5 matches) | 6.7s | 2.8s | **2.4x** |
+| Query | C reference | seed-finder | Speedup |
+|-------|-------------|-------------|---------|
+| `cherry_grove:1@300` (500 seeds) | 21.8s | 21.2s | **1.03x** |
+| `flower_forest:5@500` + `windswept_hills:5@500` (500 seeds) | 66.6s | 60.8s | **1.10x** |
+| `cherry_grove:1@300` + `village:500` (first 5 matches) | 5.4s | 2.8s | **1.93x** |
 
-The advantage comes from climate early-exit: rare biomes like cherry grove have
-narrow climate ranges, so most map points are rejected after sampling just 1-2
-of the 6 noise parameters instead of all 7. The benefit scales with search
-radius (more points to reject) and biome rarity. Combined queries benefit
-further because seeds failing the biome check skip the structure check entirely.
+Two independent speedup sources:
+
+**Climate early-exit** (~1.03–1.10x on biome-only queries): each biome grid
+point samples climate parameters one at a time; if an earlier parameter already
+rules out the target biome, remaining noise calls are skipped. The gain is
+modest for cherry grove because its continentalness and erosion bounds span a
+wide range — most rejections come from weirdness and temperature, which are
+checked later in the sequence.
+
+**Constraint reordering** (~1.80x on the combined query): the tool checks the
+cheap structure constraint first. Seeds that fail the structure check (>97% of
+seeds in this query) skip the expensive biome scan entirely. The C reference
+uses the naive biome-first order, paying the full biome scan cost for every
+seed. Combined with climate early-exit, the two effects multiply to **1.93x**.
 
 Structure-only queries use the same algorithm as cubiomes (region coordinate
 math + viability check) with no significant speed difference.
