@@ -9,4 +9,11 @@ tmp/
 
 # Local assistant tooling state
 .claude/
+.agents/
+.pi/
 src/cubiomes_port_noexport.zig
+
+# Scratch build artifacts
+*.o
+check_biome
+check_structure
