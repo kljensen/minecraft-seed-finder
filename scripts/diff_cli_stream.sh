@@ -230,28 +230,9 @@ echo "history: $HISTORY_JSONL"
 }
 
 run_golden_reference_mode() {
-    tmp_vec="$OUT_DIR/vectors.golden.check.json"
     tmp_stream="$OUT_DIR/stream.golden.check.out"
     tmp_ranked="$OUT_DIR/ranked.golden.check.out"
     tmp_csv="$OUT_DIR/csv.golden.check.out"
-    seed_count=64
-    biome_samples=128
-
-    PARITY_SEED_COUNT="$seed_count" \
-    PARITY_BIOME_SAMPLES="$biome_samples" \
-    PARITY_REGION_RADIUS=2 \
-    PARITY_BIOME_SPAN=4096 \
-    PARITY_SEED_SALT=0 \
-    PARITY_PRETTY=1 \
-    PARITY_OUTPUT_PATH="$tmp_vec" \
-    ZIG_LOCAL_CACHE_DIR="$ROOT_DIR/.zig-cache" \
-    ZIG_GLOBAL_CACHE_DIR="$ROOT_DIR/.zig-global-cache" \
-    zig build gen-parity-vectors --build-file "$ROOT_DIR/build.zig" -Doptimize=ReleaseFast >/dev/null
-
-    if ! cmp -s "$tmp_vec" "$ROOT_DIR/tests/golden/parity_vectors.json"; then
-        echo "Golden vector mismatch (reference corpus drift)"
-        exit 1
-    fi
 
     ZIG_LOCAL_CACHE_DIR="$ROOT_DIR/.zig-cache" \
     ZIG_GLOBAL_CACHE_DIR="$ROOT_DIR/.zig-global-cache" \
@@ -306,8 +287,8 @@ run_golden_reference_mode() {
         exit 1
     fi
 
-    printf '{"run_id":"%s","round":1,"reference_mode":"golden","seed_count":%d,"biome_samples":%d,"vector_match":true,"stream_match":true,"ranked_stream_match":true,"csv_stream_match":true}\n' \
-        "$RUN_ID" "$seed_count" "$biome_samples" > "$RUN_JSONL"
+    printf '{"run_id":"%s","round":1,"reference_mode":"golden","stream_match":true,"ranked_stream_match":true,"csv_stream_match":true}\n' \
+        "$RUN_ID" > "$RUN_JSONL"
     cat "$RUN_JSONL" >> "$HISTORY_JSONL"
     echo "Golden-reference conformance checks passed."
     echo "run_dir: $OUT_DIR"

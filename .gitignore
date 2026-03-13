@@ -17,3 +17,6 @@ src/cubiomes_port_noexport.zig
 *.o
 check_biome
 check_structure
+
+# Large generated golden vectors (use live parity tests instead)
+tests/golden/parity_vectors.json
