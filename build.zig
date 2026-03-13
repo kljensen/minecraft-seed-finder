@@ -28,13 +28,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Production binary — pure Zig, no C dependencies
+    // Production binary — links libc until cubiomes_port.zig is de-C'd (issue #3)
     const exe = b.addExecutable(.{
         .name = "seed-finder",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
+    exe.linkLibC();
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);

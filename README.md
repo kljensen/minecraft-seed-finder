@@ -12,7 +12,7 @@ auto-translated to Zig with targeted optimizations on the hot paths.
 - **Multi-threaded** — near-linear scaling with `--threads auto`
 - **Resumable** — checkpoint and resume long scans
 - **Output**: `text`, `jsonl`, `csv`; pipe-friendly or write to file
-- Single static binary, no runtime dependencies
+- Single binary, statically links musl libc on Linux (no runtime dependencies)
 
 ## Quick start
 

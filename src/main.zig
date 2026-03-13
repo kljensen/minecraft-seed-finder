@@ -560,7 +560,7 @@ fn performAdaptiveReorder(shared: *SharedContext) void {
     const n = atoms_a.len;
 
     // Snapshot atomic counters (use c_allocator since this runs on a worker thread)
-    const c_alloc = std.heap.c_allocator;
+    const c_alloc = std.heap.page_allocator;
     const eval_snap = c_alloc.alloc(u64, num_constraints) catch return;
     defer c_alloc.free(eval_snap);
     const fail_snap = c_alloc.alloc(u64, num_constraints) catch return;
@@ -638,7 +638,7 @@ fn printAdaptiveReorderDiag(
 }
 
 fn workerLoop(ctx: *ThreadContext, shared: *SharedContext) void {
-    const c_alloc = std.heap.c_allocator;
+    const c_alloc = std.heap.page_allocator;
 
     batch_loop: while (true) {
         if (@atomicLoad(u8, &shared.cancel_flag, .acquire) != 0) break;
@@ -1167,7 +1167,7 @@ pub fn main() !void {
 
     var top = std.ArrayList(MatchCandidate).init(allocator);
     defer {
-        const diag_alloc = if (num_threads > 0) std.heap.c_allocator else allocator;
+        const diag_alloc = if (num_threads > 0) std.heap.page_allocator else allocator;
         for (top.items) |item| diag_alloc.free(item.diagnostics);
         top.deinit();
     }
@@ -1369,7 +1369,7 @@ pub fn main() !void {
     }
     } else {
     // --- multi-threaded path ---
-    const c_alloc = std.heap.c_allocator;
+    const c_alloc = std.heap.page_allocator;
     const output_file = if (out_file) |f| f else std.io.getStdOut();
 
     var shared = SharedContext{
