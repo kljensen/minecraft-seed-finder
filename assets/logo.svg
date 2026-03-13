@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <title>minecraft-seed-finder logo</title>
+
+  <!-- Dark rounded background -->
+  <rect width="200" height="200" rx="32" ry="32" fill="#1A1A2E"/>
+
+  <!-- ── Grass block (front face) ── -->
+  <!-- Block occupies x=45..130, y=58..148 -->
+
+  <!-- Dirt section -->
+  <rect x="45" y="92" width="85" height="56" fill="#866043"/>
+  <!-- Dirt texture pixels -->
+  <rect x="53"  y="100" width="8" height="8" fill="#9A7050"/>
+  <rect x="73"  y="109" width="8" height="8" fill="#74512E"/>
+  <rect x="93"  y="101" width="8" height="8" fill="#9A7050"/>
+  <rect x="112" y="112" width="8" height="8" fill="#74512E"/>
+  <rect x="59"  y="122" width="8" height="8" fill="#74512E"/>
+  <rect x="84"  y="127" width="8" height="8" fill="#9A7050"/>
+  <rect x="106" y="124" width="8" height="8" fill="#74512E"/>
+
+  <!-- Grass top (green) -->
+  <rect x="45" y="66" width="85" height="26" fill="#79C73E"/>
+  <!-- Dark green stripe — bottom of grass top -->
+  <rect x="45" y="86" width="85" height="6"  fill="#4E9A1F"/>
+
+  <!-- Grass fringe hanging into dirt (pixel drips) -->
+  <rect x="48"  y="92" width="9" height="16" fill="#5DB332"/>
+  <rect x="65"  y="92" width="7" height="10" fill="#5DB332"/>
+  <rect x="80"  y="92" width="9" height="19" fill="#5DB332"/>
+  <rect x="97"  y="92" width="7" height="14" fill="#5DB332"/>
+  <rect x="112" y="92" width="9" height="9"  fill="#5DB332"/>
+
+  <!-- Block outline -->
+  <rect x="45" y="66" width="85" height="82" fill="none" stroke="#000000" stroke-width="2.5" opacity="0.3"/>
+
+  <!-- ── Magnifying glass (Zig orange) ── -->
+  <!-- Semi-transparent dark lens lets the block show through -->
+  <circle cx="120" cy="94" r="33"
+          fill="#0D0D1A" fill-opacity="0.72"
+          stroke="#F7A41D" stroke-width="9"/>
+  <!-- Handle -->
+  <line x1="144" y1="118" x2="166" y2="146"
+        stroke="#F7A41D" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Diamond / seed symbol inside lens -->
+  <polygon points="120,78 134,94 120,110 106,94" fill="#F7A41D" opacity="0.92"/>
+</svg>

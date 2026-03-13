@@ -1,6 +1,6 @@
 .{
     .name = .seed_finder,
-    .version = "0.0.0",
+    .version = "0.1.0",
     .minimum_zig_version = "0.14.0",
     .fingerprint = 0xd4682c9b7e0a60f5,
     .dependencies = .{},
