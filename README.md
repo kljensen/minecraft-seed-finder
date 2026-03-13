@@ -8,7 +8,7 @@ auto-translated to Zig with targeted optimizations on the hot paths.
 
 - **Bedrock + Java**, MC 1.18 – 1.21.1
 - **Biome + structure search** with radius constraints, count thresholds, and `and`/`or`/`not` composition
-- **10–21× faster** than a naive C baseline (see [Performance](#performance)) thanks to constraint reordering and climate parameter early-exit
+- **Two key optimizations** — constraint reordering and climate early-exit — account for 10–21× on combined queries (see [Performance](#performance))
 - **Multi-threaded** — near-linear scaling with `--threads auto`
 - **Resumable** — checkpoint and resume long scans
 - **Output**: `text`, `jsonl`, `csv`; pipe-friendly or write to file
@@ -179,37 +179,39 @@ just conformance               # full CLI conformance (requires C sources)
 
 ## Performance
 
-### vs C reference
+### Ablation: how much do the optimizations matter?
 
-The baseline is `bench/c_reference.c` — a C program with the exact same search
-algorithm (same circular biome grid, same impossible-fail short-circuit, same
-structure region math) but without the Zig optimizations: it calls cubiomes'
-`getBiomeAt()` unconditionally for every grid point (evaluating all 6 climate
-parameters each time), and checks biome constraints before structure constraints
-(naive ordering). Reproduce with `sh scripts/bench_vs_c_ref.sh`.
+To measure the combined effect of the two main algorithmic choices —
+constraint reordering and climate early-exit — `bench/c_reference.c` implements
+the exact same search *without* them. Same circular biome grid, same
+impossible-fail short-circuit, same structure region math, but it calls
+`getBiomeAt()` unconditionally (all 6 climate parameters every time) and always
+checks biomes before structures (naive ordering).
 
-These benchmark queries match the example seeds section above. Anchored at
-(0,0), single-threaded, Java edition, MC 1.21.1 on Apple M1 Max. Both tools
-find identical seeds.
+This is an ablation test, not a comparison against another tool.
+Reproduce with `sh scripts/bench_vs_c_ref.sh`.
 
-| Query | C reference | seed-finder | Speedup |
-|-------|-------------|-------------|---------|
+Anchored at (0,0), single-threaded, Java edition, MC 1.21.1 on Apple M1 Max.
+Both find identical seeds.
+
+| Query | Without opts | With opts | Difference |
+|-------|-------------|-----------|------------|
 | `cherry_grove:1@300` + `village:400` + `outpost:800` (first 5) |  19.7s |  1.9s | 10x |
 | `ice_spikes:1@500`   + `village:400` + `outpost:600` (first 5) | 102.5s |  4.8s | 21x |
 
-The speedups come from two effects that multiply:
+Why so large? The two effects multiply:
 
-**Constraint reordering**: the tool evaluates cheap structure constraints first.
-Both queries require two structures, which together reject ~99% of seeds before
-any biome grid scan occurs. The C reference uses naive biome-first ordering,
-paying the full biome scan cost for every seed.
+**Constraint reordering** evaluates cheap structure constraints first. Both
+queries require two structures, which together reject ~99% of seeds before any
+biome scan runs. The unoptimized version pays the full biome scan cost for
+every seed.
 
-**Climate early-exit**: for the ~1% of seeds that pass the structure checks, each
-biome grid point samples climate parameters one at a time and exits as soon as
-one parameter rules out the target biome, skipping the remaining noise calls.
+**Climate early-exit** samples climate parameters one at a time per biome grid
+point, stopping as soon as one parameter rules out the target biome. The
+unoptimized version evaluates all 6 parameters unconditionally.
 
-Structure-only queries use the same algorithm as cubiomes (region coordinate
-math + viability check) with no significant speed difference.
+For structure-only queries there is no meaningful difference — both use the
+same region coordinate math and viability checks.
 
 ### Multi-threading
 
