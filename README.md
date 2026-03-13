@@ -1,31 +1,20 @@
-<div align="center">
-  <img src="assets/logo.svg" width="150" alt="minecraft-seed-finder logo" />
+# minecraft-seed-finder
 
-  # minecraft-seed-finder
+A Minecraft seed finder written in Zig. Search for seeds by biome, structure,
+or any combination using boolean expressions.
 
-  [![CI](https://img.shields.io/github/actions/workflow/status/kljensen/minecraft-seed-finder/ci.yml?branch=main&style=for-the-badge&logo=github-actions&logoColor=white&label=CI)](https://github.com/kljensen/minecraft-seed-finder/actions/workflows/ci.yml)
-  [![Zig 0.14.0+](https://img.shields.io/badge/Zig-0.14.0%2B-F7A41D?style=for-the-badge&logo=zig&logoColor=white)](https://ziglang.org/)
-  [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue?style=for-the-badge)](https://unlicense.org/)
-  [![Minecraft: Bedrock + Java](https://img.shields.io/badge/Minecraft-Bedrock%20%2B%20Java-5C8B22?style=for-the-badge&logo=minecraft&logoColor=white)](https://minecraft.net)
-  [![Speed](https://img.shields.io/badge/speed-10%E2%80%9321%C3%97%20vs%20C-FF6B00?style=for-the-badge)](#-performance)
-  [![Linux](https://img.shields.io/badge/Linux-%E2%9C%93-brightgreen?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/kljensen/minecraft-seed-finder)
+Based on [cubiomes](https://github.com/Cubitect/cubiomes) by Cubitect,
+auto-translated to Zig with targeted optimizations on the hot paths.
 
-  *A blazing-fast Minecraft seed finder in Zig — search billions of seeds by biome,*
-  *structure, or any combination. No runtime dependencies.*
+- **Bedrock + Java**, MC 1.18 – 1.21.1
+- **Biome + structure search** with radius constraints, count thresholds, and `and`/`or`/`not` composition
+- **10–21× faster** than a naive C baseline (see [Performance](#performance)) thanks to constraint reordering and climate parameter early-exit
+- **Multi-threaded** — near-linear scaling with `--threads auto`
+- **Resumable** — checkpoint and resume long scans
+- **Output**: `text`, `jsonl`, `csv`; pipe-friendly or write to file
+- Single static binary, no runtime dependencies
 
-</div>
-
-## ✨ Features
-
-- 🌍 **Bedrock + Java** — both editions, MC 1.18 – 1.21.1
-- 🔎 **Biome + structure search** — radius constraints, count thresholds, and boolean composition (`and` / `or` / `not`)
-- ⚡ **10–21× faster than C** — climate parameter early-exit + constraint reordering reject ~99% of seeds before any expensive scan
-- 🧵 **Multi-threaded** — near-linear scaling with `--threads auto`
-- 🔁 **Resumable scans** — checkpoint and resume for long overnight searches
-- 📤 **Flexible output** — `text`, `jsonl`, `csv`; pipe-friendly or write to file
-- 🧮 **Pure Zig binary** — no runtime C dependencies; cubiomes C used only for test parity
-
-## ⚡ Quick Start
+## Quick start
 
 Requires [Zig](https://ziglang.org/) 0.14.0+.
 
@@ -33,9 +22,8 @@ Requires [Zig](https://ziglang.org/) 0.14.0+.
 zig build -Doptimize=ReleaseFast
 ```
 
-Find a flat valley below snowy peaks — level terrain at spawn, jagged peaks
-with exposed coal towering nearby, lush caves and a deep dark underneath,
-a village within walking distance:
+Find flower forest + meadow near spawn with jagged peaks, lush caves, and a
+deep dark nearby, plus a village:
 
 ```sh
 zig build run -Doptimize=ReleaseFast -- \
@@ -49,7 +37,7 @@ zig build run -Doptimize=ReleaseFast -- \
   --require-structure "village:400"
 ```
 
-## 🗺️ Example Seeds
+## Example seeds
 
 All examples use Bedrock edition (the default), MC 1.21.1, random seed sampling.
 Results vary each run — these are real seeds from one run of each command.
@@ -99,7 +87,7 @@ seed=-807 5115 1774 6899 7460 spawn=(0,0)   jagged_peaks@14   village@354  outpo
 seed=409 8352 6067 1576 6184  spawn=(0,0)   jagged_peaks@165  village@354  outpost@319
 ```
 
-## 📖 Usage
+## Usage
 
 ```
 seed-finder --count <N> [options]
@@ -175,12 +163,12 @@ zig build run -- --count 10 --max-seed 50000000 \
 --help                               show help
 ```
 
-## 🏗️ Supported Structures
+## Supported structures
 
 `ancient_city` · `desert_pyramid` · `igloo` · `jungle_pyramid` · `mansion` · `monument` ·
 `ocean_ruin` · `outpost` · `ruined_portal` · `shipwreck` · `swamp_hut` · `treasure` · `village`
 
-## 🧪 Testing
+## Testing
 
 ```sh
 zig build test                 # unit tests
@@ -189,27 +177,27 @@ just fuzz                      # differential fuzz against C reference
 just conformance               # full CLI conformance (requires C sources)
 ```
 
-## 🚀 Performance
+## Performance
 
 ### vs C reference
 
 The baseline is `bench/c_reference.c` — a C program with the exact same search
 algorithm (same circular biome grid, same impossible-fail short-circuit, same
-structure region math) but without the Zig optimisations: it calls cubiomes'
+structure region math) but without the Zig optimizations: it calls cubiomes'
 `getBiomeAt()` unconditionally for every grid point (evaluating all 6 climate
 parameters each time), and checks biome constraints before structure constraints
 (naive ordering). Reproduce with `sh scripts/bench_vs_c_ref.sh`.
 
-These benchmark queries match the Example seeds section above. Anchored at
+These benchmark queries match the example seeds section above. Anchored at
 (0,0), single-threaded, Java edition, MC 1.21.1 on Apple M1 Max. Both tools
 find identical seeds.
 
 | Query | C reference | seed-finder | Speedup |
 |-------|-------------|-------------|---------|
-| `cherry_grove:1@300` + `village:400` + `outpost:800` (first 5) |  19.7s |  1.9s | **10x** |
-| `ice_spikes:1@500`   + `village:400` + `outpost:600` (first 5) | 102.5s |  4.8s | **21x** |
+| `cherry_grove:1@300` + `village:400` + `outpost:800` (first 5) |  19.7s |  1.9s | 10x |
+| `ice_spikes:1@500`   + `village:400` + `outpost:600` (first 5) | 102.5s |  4.8s | 21x |
 
-The large speedups come from two effects that multiply:
+The speedups come from two effects that multiply:
 
 **Constraint reordering**: the tool evaluates cheap structure constraints first.
 Both queries require two structures, which together reject ~99% of seeds before
@@ -239,15 +227,15 @@ embarrassingly parallel.
 
 ### Optimization history
 
-The Zig port was iteratively profiled and optimized over 10 rounds. Key wins
-(measured as internal before/after on a hard biome+structure query):
+The Zig port was iteratively profiled and optimized. Key wins (measured as
+internal before/after on a hard biome+structure query):
 
 | Speedup | Optimization |
 |---------|-------------|
 | ~1.3x | Climate parameter early-exit — skip remaining noise calls when earlier parameters already rule out the target biome |
 | 1.56x | Defer `getSpawn` for anchor queries — spawn was 36% of per-seed cost and wasted on seeds that fail constraints |
 | 1.06x | Cached sequential multi-biome scan — share noise cache across biome constraints |
-| 1.04x | Rewrite `get_resulting_node`/`get_np_dist` biome tree walk as clean idiomatic Zig |
+| 1.04x | Rewrite `get_resulting_node`/`get_np_dist` biome tree walk as idiomatic Zig |
 | 1.04x | Structure eval: region sorting by distance + constraint cost ordering |
 
 ### What didn't work
@@ -259,7 +247,7 @@ The Zig port was iteratively profiled and optimized over 10 rounds. Key wins
 | 0% | SIMD vectorization — not on the hot path (only used in shadow probes) |
 | 0% | Cached structure config fast-path — already fast enough |
 
-## ⚙️ How It Works
+## How it works
 
 The core biome and structure generation logic comes from
 [cubiomes](https://github.com/Cubitect/cubiomes) by Cubitect, a C library that
@@ -272,7 +260,7 @@ The search loop iterates over seeds, evaluates structure placement via region
 coordinate math, and samples biome noise to check constraints. A boolean
 expression engine lets you compose constraints with `and`/`or`/`not` logic.
 
-## 📄 License
+## License
 
 The seed finder code is released under the [Unlicense](https://unlicense.org/)
 (public domain).
