@@ -20,3 +20,4 @@ check_structure
 
 # Large generated golden vectors (use live parity tests instead)
 tests/golden/parity_vectors.json
+*.bak
