@@ -94,6 +94,10 @@ equivalence-quick:
 conformance ROUNDS="6":
     scripts/diff_cli_stream.sh {{ROUNDS}}
 
+# AI improvement loop: explore, change, test, commit (or reset)
+wiggum ITERS="5":
+    scripts/wiggum.sh {{ITERS}}
+
 # Throughput benchmark across scalar/SIMD/parallel modes
 bench:
     scripts/bench_parity.sh
