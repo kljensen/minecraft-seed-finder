@@ -857,28 +857,14 @@ pub fn buildStructureRegionsForAnchor(
     req: StructureReq,
 ) ![]StructureRegion {
     const cfg = req.cfg orelse return allocator.alloc(StructureRegion, 0);
-
-    const min_x = center.x - req.radius;
-    const max_x = center.x + req.radius;
-    const min_z = center.z - req.radius;
-    const max_z = center.z + req.radius;
-
-    const min_attempt_chunk_x = floorDiv(min_x - 8, 16);
-    const max_attempt_chunk_x = floorDiv(max_x - 8, 16);
-    const min_attempt_chunk_z = floorDiv(min_z - 8, 16);
-    const max_attempt_chunk_z = floorDiv(max_z - 8, 16);
-
-    const min_reg_x = floorDiv(min_attempt_chunk_x - (cfg.spacing - 1), cfg.spacing);
-    const max_reg_x = floorDiv(max_attempt_chunk_x, cfg.spacing);
-    const min_reg_z = floorDiv(min_attempt_chunk_z - (cfg.spacing - 1), cfg.spacing);
-    const max_reg_z = floorDiv(max_attempt_chunk_z, cfg.spacing);
+    const bounds = computeStructureRegionBounds(center, req.radius, cfg);
 
     var out = std.ArrayList(StructureRegion).init(allocator);
     errdefer out.deinit();
-    var reg_z = min_reg_z;
-    while (reg_z <= max_reg_z) : (reg_z += 1) {
-        var reg_x = min_reg_x;
-        while (reg_x <= max_reg_x) : (reg_x += 1) {
+    var reg_z = bounds.min_reg_z;
+    while (reg_z <= bounds.max_reg_z) : (reg_z += 1) {
+        var reg_x = bounds.min_reg_x;
+        while (reg_x <= bounds.max_reg_x) : (reg_x += 1) {
             if (structure_bbox_prune_enabled and !regionMayIntersectRadius(center, cfg, reg_x, reg_z, req.radius2)) continue;
             try out.append(.{ .reg_x = reg_x, .reg_z = reg_z });
         }
