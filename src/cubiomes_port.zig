@@ -1148,7 +1148,7 @@ pub fn xDoublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_xr: [*c]Xoroshiro
     noise.*.amplitude = amp_ini.static[@as(c_uint, @intCast(len))];
     return n;
 }
-pub export fn sampleDoublePerlin(arg_noise: [*c]const DoublePerlinNoise, arg_x: f64, arg_y: f64, arg_z: f64) f64 {
+pub fn sampleDoublePerlin(arg_noise: [*c]const DoublePerlinNoise, arg_x: f64, arg_y: f64, arg_z: f64) f64 {
     var noise = arg_noise;
     _ = &noise;
     var x = arg_x;
@@ -2033,7 +2033,7 @@ pub fn getVoronoiSHA(arg_seed: u64) u64 {
     a1 +%= B.static[@as(c_uint, @intCast(@as(c_int, 1)))];
     return @as(u64, @bitCast(@as(c_ulong, __builtin_bswap32(a0)))) | (@as(u64, @bitCast(@as(c_ulong, __builtin_bswap32(a1)))) << @intCast(32));
 }
-pub export fn voronoiAccess3D(arg_sha: u64, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_x4: [*c]c_int, arg_y4: [*c]c_int, arg_z4: [*c]c_int) void {
+pub fn voronoiAccess3D(arg_sha: u64, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_x4: [*c]c_int, arg_y4: [*c]c_int, arg_z4: [*c]c_int) void {
     var sha = arg_sha;
     _ = &sha;
     var x = arg_x;
@@ -2146,7 +2146,7 @@ pub inline fn memset(__s: ?*anyopaque, __c: c_int, __n: c_ulong) ?*anyopaque {
     return __s;
 }
 // index: removed (unused extern)
-pub export const warmBiomes: [6]c_int = [6]c_int{
+pub const warmBiomes: [6]c_int = [6]c_int{
     desert,
     desert,
     desert,
@@ -2154,7 +2154,7 @@ pub export const warmBiomes: [6]c_int = [6]c_int{
     savanna,
     plains,
 };
-pub export const lushBiomes: [6]c_int = [6]c_int{
+pub const lushBiomes: [6]c_int = [6]c_int{
     forest,
     dark_forest,
     mountains,
@@ -2162,19 +2162,19 @@ pub export const lushBiomes: [6]c_int = [6]c_int{
     birch_forest,
     swamp,
 };
-pub export const coldBiomes: [4]c_int = [4]c_int{
+pub const coldBiomes: [4]c_int = [4]c_int{
     forest,
     mountains,
     taiga,
     plains,
 };
-pub export const snowBiomes: [4]c_int = [4]c_int{
+pub const snowBiomes: [4]c_int = [4]c_int{
     snowy_tundra,
     snowy_tundra,
     snowy_tundra,
     snowy_taiga,
 };
-pub export const oldBiomes: [7]c_int = [7]c_int{
+pub const oldBiomes: [7]c_int = [7]c_int{
     desert,
     forest,
     mountains,
@@ -2183,7 +2183,7 @@ pub export const oldBiomes: [7]c_int = [7]c_int{
     taiga,
     jungle,
 };
-pub export const oldBiomes11: [6]c_int = [6]c_int{
+pub const oldBiomes11: [6]c_int = [6]c_int{
     desert,
     forest,
     mountains,
@@ -7529,7 +7529,7 @@ pub fn getOldBetaBiome(arg_t: f32, arg_h: f32) c_int {
     _ = &idx;
     return bmap.static[biome_table_beta_1_7.static[@as(c_uint, @intCast(idx))]];
 }
-pub export fn climateToBiome(arg_mc: c_int, np: [*c]const u64, arg_dat: [*c]u64) c_int {
+pub fn climateToBiome(arg_mc: c_int, np: [*c]const u64, arg_dat: [*c]u64) c_int {
     var mc = arg_mc;
     _ = &mc;
     _ = &np;
@@ -9740,7 +9740,7 @@ pub fn createLandSpline(arg_ss: [*c]SplineStack, arg_f: f32, arg_g: f32, arg_h: 
     addSplineVal(sp, 0.699999988079071, sp9, 0.0);
     return sp;
 }
-pub export fn getSpline(arg_sp: [*c]const Spline, arg_vals: [*c]const f32) f32 {
+pub fn getSpline(arg_sp: [*c]const Spline, arg_vals: [*c]const f32) f32 {
     var sp = arg_sp;
     _ = &sp;
     var vals = arg_vals;
@@ -10100,7 +10100,7 @@ pub const struct_Generator = extern struct {
     en: EndNoise = @import("std").mem.zeroes(EndNoise),
 };
 pub const Generator = struct_Generator;
-pub export fn setupGenerator(arg_g: [*c]Generator, arg_mc: c_int, arg_flags: u32) void {
+pub fn setupGenerator(arg_g: [*c]Generator, arg_mc: c_int, arg_flags: u32) void {
     var g = arg_g;
     _ = &g;
     var mc = arg_mc;
@@ -10126,7 +10126,7 @@ pub export fn setupGenerator(arg_g: [*c]Generator, arg_mc: c_int, arg_flags: u32
         g.*.unnamed_0.unnamed_2.bnb.mc = mc;
     }
 }
-pub export fn applySeed(arg_g: [*c]Generator, arg_dim: c_int, arg_seed: u64) void {
+pub fn applySeed(arg_g: [*c]Generator, arg_dim: c_int, arg_seed: u64) void {
     var g = arg_g;
     _ = &g;
     var dim = arg_dim;
@@ -10199,7 +10199,7 @@ pub fn getMinCacheSize(arg_g: [*c]const Generator, arg_scale: c_int, arg_sx: c_i
     }
     return len;
 }
-pub export fn allocCache(arg_g: [*c]const Generator, arg_r: Range) [*c]c_int {
+pub fn allocCache(arg_g: [*c]const Generator, arg_r: Range) [*c]c_int {
     var g = arg_g;
     _ = &g;
     var r = arg_r;
@@ -10209,7 +10209,7 @@ pub export fn allocCache(arg_g: [*c]const Generator, arg_r: Range) [*c]c_int {
     if (len == @as(usize, @bitCast(@as(c_long, @as(c_int, 0))))) return null;
     return @as([*c]c_int, @ptrCast(@alignCast(calloc(len, @sizeOf(c_int)))));
 }
-pub export fn genBiomes(arg_g: [*c]const Generator, arg_cache: [*c]c_int, arg_r: Range) c_int {
+pub fn genBiomes(arg_g: [*c]const Generator, arg_cache: [*c]c_int, arg_r: Range) c_int {
     var g = arg_g;
     _ = &g;
     var cache = arg_cache;
@@ -10285,7 +10285,7 @@ pub export fn genBiomes(arg_g: [*c]const Generator, arg_cache: [*c]c_int, arg_r:
     }
     return err;
 }
-pub export fn getBiomeAt(arg_g: [*c]const Generator, arg_scale: c_int, arg_x: c_int, arg_y: c_int, arg_z: c_int) c_int {
+pub fn getBiomeAt(arg_g: [*c]const Generator, arg_scale: c_int, arg_x: c_int, arg_y: c_int, arg_z: c_int) c_int {
     var g = arg_g;
     _ = &g;
     var scale = arg_scale;
@@ -10597,7 +10597,7 @@ pub fn genArea(arg_layer: [*c]const Layer, arg_out: [*c]c_int, arg_areaX: c_int,
     _ = memset(@as(?*anyopaque, @ptrCast(out)), @as(c_int, 0), (@sizeOf(c_int) *% @as(c_ulong, @bitCast(@as(c_long, areaWidth)))) *% @as(c_ulong, @bitCast(@as(c_long, areaHeight))));
     return layer.*.getMap.?(layer, out, areaX, areaZ, areaWidth, areaHeight);
 }
-pub export fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Generator, arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int) c_int {
+pub fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Generator, arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int) c_int {
     var y = arg_y;
     _ = &y;
     var ids = arg_ids;
@@ -11088,7 +11088,7 @@ pub const struct_StructureVariant = extern struct {
     sz: i16,
 };
 pub const StructureVariant = struct_StructureVariant;
-pub export fn getStructureConfig(arg_structureType: c_int, arg_mc: c_int, arg_sconf: [*c]StructureConfig) c_int {
+pub fn getStructureConfig(arg_structureType: c_int, arg_mc: c_int, arg_sconf: [*c]StructureConfig) c_int {
     var structureType = arg_structureType;
     _ = &structureType;
     var mc = arg_mc;
@@ -11675,7 +11675,7 @@ pub export fn getStructureConfig(arg_structureType: c_int, arg_mc: c_int, arg_sc
     }
     return 0;
 }
-pub export fn getStructurePos(arg_structureType: c_int, arg_mc: c_int, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int, arg_pos: [*c]Pos) c_int {
+pub fn getStructurePos(arg_structureType: c_int, arg_mc: c_int, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int, arg_pos: [*c]Pos) c_int {
     var structureType = arg_structureType;
     _ = &structureType;
     var mc = arg_mc;
@@ -12050,7 +12050,7 @@ pub fn estimateSpawn(arg_g: [*c]const Generator, arg_rng: [*c]u64) Pos {
     }
     return spawn;
 }
-pub export fn getSpawn(arg_g: [*c]const Generator) Pos {
+pub fn getSpawn(arg_g: [*c]const Generator) Pos {
     var g = arg_g;
     _ = &g;
     var rng: u64 = undefined;
@@ -12338,7 +12338,7 @@ pub fn locateBiome(arg_g: [*c]const Generator, arg_x: c_int, arg_y: c_int, arg_z
     return out;
 }
 
-pub export fn isViableStructurePos(arg_structureType: c_int, arg_g: [*c]Generator, arg_x: c_int, arg_z: c_int, arg_flags: u32) c_int {
+pub fn isViableStructurePos(arg_structureType: c_int, arg_g: [*c]Generator, arg_x: c_int, arg_z: c_int, arg_flags: u32) c_int {
     const structureType = arg_structureType;
     const g = arg_g;
     const x = arg_x;
@@ -12565,7 +12565,7 @@ pub fn isViableFeatureBiome(arg_mc: c_int, arg_structureType: c_int, arg_biomeID
     }
     return 0;
 }
-pub export fn isViableStructureTerrain(arg_structType: c_int, arg_g: [*c]Generator, arg_x: c_int, arg_z: c_int) c_int {
+pub fn isViableStructureTerrain(arg_structType: c_int, arg_g: [*c]Generator, arg_x: c_int, arg_z: c_int) c_int {
     var structType = arg_structType;
     _ = &structType;
     var g = arg_g;
@@ -15204,7 +15204,7 @@ pub fn bedrockChunkGenerateRnd(worldseed: u64, chunkX: c_int, chunkZ: c_int, n: 
     _ = &mixedSeed;
     mSetSeed(mt, mixedSeed, n);
 }
-pub export fn getBedrockStructureConfig(arg_structureType: c_int, arg_mc: c_int, arg_sconf: [*c]StructureConfig) bool {
+pub fn getBedrockStructureConfig(arg_structureType: c_int, arg_mc: c_int, arg_sconf: [*c]StructureConfig) bool {
     var structureType = arg_structureType;
     _ = &structureType;
     var mc = arg_mc;
@@ -15555,7 +15555,7 @@ pub export fn getBedrockStructureConfig(arg_structureType: c_int, arg_mc: c_int,
     }
     return false;
 }
-pub export fn getBedrockStructurePos(arg_structureType: c_int, arg_mc: c_int, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int, arg_pos: [*c]Pos) bool {
+pub fn getBedrockStructurePos(arg_structureType: c_int, arg_mc: c_int, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int, arg_pos: [*c]Pos) bool {
     var structureType = arg_structureType;
     _ = &structureType;
     var mc = arg_mc;
