@@ -512,7 +512,20 @@ fn sampleBiomeScalar(g: *c.Generator, sampler_opt: *?CachedBiomeSampler, x: i32,
         c.getBiomeAt(g, 1, x, 0, z);
 }
 
-fn nextOffsetRun(offsets: []const BiomeOffset, start: usize) RowRun {
+fn inferOffsetRunStep(offsets: []const BiomeOffset) i32 {
+    if (offsets.len < 2) return 4;
+    var i: usize = 1;
+    while (i < offsets.len) : (i += 1) {
+        const prev = offsets[i - 1];
+        const curr = offsets[i];
+        if (curr.dz != prev.dz) continue;
+        const step = curr.dx - prev.dx;
+        if (step > 0) return step;
+    }
+    return 4;
+}
+
+fn nextOffsetRunWithStep(offsets: []const BiomeOffset, start: usize, x_step: i32) RowRun {
     const first = offsets[start];
     const z = first.dz;
     const min_x = first.dx;
@@ -521,7 +534,7 @@ fn nextOffsetRun(offsets: []const BiomeOffset, start: usize) RowRun {
     var i = start + 1;
     while (i < offsets.len) : (i += 1) {
         const off = offsets[i];
-        if (off.dz != z or off.dx != prev_x + 4) break;
+        if (off.dz != z or off.dx != prev_x + x_step) break;
         prev_x = off.dx;
         max_x = off.dx;
     }
@@ -532,6 +545,10 @@ fn nextOffsetRun(offsets: []const BiomeOffset, start: usize) RowRun {
         .min_x = min_x,
         .max_x = max_x,
     };
+}
+
+fn nextOffsetRun(offsets: []const BiomeOffset, start: usize) RowRun {
+    return nextOffsetRunWithStep(offsets, start, 4);
 }
 
 fn nextPointRun(points: []const BiomePoint, start: usize) RowRun {
@@ -556,17 +573,21 @@ fn nextPointRun(points: []const BiomePoint, start: usize) RowRun {
     };
 }
 
-fn maxOffsetRunWidth(offsets: []const BiomeOffset) i32 {
+fn maxOffsetRunWidthWithStep(offsets: []const BiomeOffset, x_step: i32) i32 {
     if (offsets.len == 0) return 0;
     var i: usize = 0;
     var max_width: i32 = 1;
     while (i < offsets.len) {
-        const run = nextOffsetRun(offsets, i);
+        const run = nextOffsetRunWithStep(offsets, i, x_step);
         const width = rowRunWidth(run);
         if (width > max_width) max_width = width;
         i = run.end;
     }
     return max_width;
+}
+
+fn maxOffsetRunWidth(offsets: []const BiomeOffset) i32 {
+    return maxOffsetRunWidthWithStep(offsets, 4);
 }
 
 fn maxPointRunWidth(points: []const BiomePoint) i32 {
@@ -1081,14 +1102,51 @@ fn countBiomeMatchesWithBounds(g: *c.Generator, center: c.Pos, biome_id: i32, ma
     var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
 
-    for (offsets) |off| {
-        const x = center.x + off.dx;
-        const z = center.z + off.dz;
-        const id = sampleBiomeScalar(g, &sampler_opt, x, z, climate_bounds);
-        if (id == biome_id) {
-            count += 1;
-            if (count >= max_needed) return count;
+    // Row batching helps large coarse scans, but adds overhead for short scans
+    // that usually hit min_count quickly.
+    const use_row_sampler = !fast_enabled and offsets.len >= 8192;
+    if (!use_row_sampler) {
+        for (offsets) |off| {
+            const x = center.x + off.dx;
+            const z = center.z + off.dz;
+            const id = sampleBiomeScalar(g, &sampler_opt, x, z, climate_bounds);
+            if (id == biome_id) {
+                count += 1;
+                if (count >= max_needed) return count;
+            }
         }
+        return count;
+    }
+
+    const x_step = inferOffsetRunStep(offsets);
+    var row_sampler_opt: ?CachedBiomeRowSampler = CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidthWithStep(offsets, x_step));
+    defer if (row_sampler_opt) |*sampler| sampler.deinit();
+
+    var i: usize = 0;
+    while (i < offsets.len) {
+        const run = nextOffsetRunWithStep(offsets, i, x_step);
+        const run_width = rowRunWidth(run);
+        const run_z = center.z + run.z;
+        const run_min_x = center.x + run.min_x;
+        var row_ready = false;
+        if (row_sampler_opt) |*row_sampler| {
+            row_ready = row_sampler.sampleRow(run_min_x, run_z, run_width);
+        }
+
+        var j = run.start;
+        while (j < run.end) : (j += 1) {
+            const off = offsets[j];
+            const x = center.x + off.dx;
+            const id = if (row_ready)
+                row_sampler_opt.?.getBiomeAt(x - run_min_x)
+            else
+                sampleBiomeScalar(g, &sampler_opt, x, run_z, climate_bounds);
+            if (id == biome_id) {
+                count += 1;
+                if (count >= max_needed) return count;
+            }
+        }
+        i = run.end;
     }
     return count;
 }
