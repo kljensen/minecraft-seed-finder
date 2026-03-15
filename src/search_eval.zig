@@ -503,20 +503,18 @@ fn sampleBiomeScalar(g: *c.Generator, sampler_opt: *?CachedBiomeSampler, x: i32,
         c.getBiomeAt(g, 1, x, 0, z);
 }
 
-fn nextOffsetRun(center: c.Pos, offsets: []const BiomeOffset, start: usize) RowRun {
+fn nextOffsetRun(offsets: []const BiomeOffset, start: usize) RowRun {
     const first = offsets[start];
-    const z = center.z + first.dz;
-    const min_x = center.x + first.dx;
+    const z = first.dz;
+    const min_x = first.dx;
     var max_x = min_x;
     var prev_x = min_x;
     var i = start + 1;
     while (i < offsets.len) : (i += 1) {
         const off = offsets[i];
-        const x = center.x + off.dx;
-        const row_z = center.z + off.dz;
-        if (row_z != z or x != prev_x + 4) break;
-        prev_x = x;
-        max_x = x;
+        if (off.dz != z or off.dx != prev_x + 4) break;
+        prev_x = off.dx;
+        max_x = off.dx;
     }
     return .{
         .start = start,
@@ -549,12 +547,12 @@ fn nextPointRun(points: []const BiomePoint, start: usize) RowRun {
     };
 }
 
-fn maxOffsetRunWidth(center: c.Pos, offsets: []const BiomeOffset) i32 {
+fn maxOffsetRunWidth(offsets: []const BiomeOffset) i32 {
     if (offsets.len == 0) return 0;
     var i: usize = 0;
     var max_width: i32 = 1;
     while (i < offsets.len) {
-        const run = nextOffsetRun(center, offsets, i);
+        const run = nextOffsetRun(offsets, i);
         const width = rowRunWidth(run);
         if (width > max_width) max_width = width;
         i = run.end;
@@ -942,27 +940,29 @@ fn scanBiomeWithinRadiusWithBounds(g: *c.Generator, center: c.Pos, biome_id: i32
     const fast_enabled = fastBiomeSamplingEligible(g, climate_bounds);
     var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
-    var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
+    var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(offsets));
     defer if (row_sampler_opt) |*sampler| sampler.deinit();
 
     var i: usize = 0;
     while (i < offsets.len) {
-        const run = nextOffsetRun(center, offsets, i);
+        const run = nextOffsetRun(offsets, i);
         const run_width = rowRunWidth(run);
+        const run_z = center.z + run.z;
+        const run_min_x = center.x + run.min_x;
         var row_ready = false;
         var row_sampler_ptr: ?*CachedBiomeRowSampler = null;
         if (row_sampler_opt) |*row_sampler| {
             row_sampler_ptr = row_sampler;
-            row_ready = row_sampler.sampleRow(run.min_x, run.z, run_width);
+            row_ready = row_sampler.sampleRow(run_min_x, run_z, run_width);
         }
         var j = run.start;
         while (j < run.end) : (j += 1) {
             const off = offsets[j];
             const x = center.x + off.dx;
             const id = if (row_ready)
-                row_sampler_ptr.?.getBiomeAt(x - run.min_x)
+                row_sampler_ptr.?.getBiomeAt(x - run_min_x)
             else
-                sampleBiomeScalar(g, &sampler_opt, x, run.z, climate_bounds);
+                sampleBiomeScalar(g, &sampler_opt, x, run_z, climate_bounds);
             if (id != biome_id) continue;
             count += 1;
             if (off.dist2 < best) best = off.dist2;
@@ -1022,27 +1022,29 @@ fn biomeMatchesWithinRadiusWithBounds(g: *c.Generator, center: c.Pos, biome_id: 
     const fast_enabled = fastBiomeSamplingEligible(g, climate_bounds);
     var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
-    var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
+    var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(offsets));
     defer if (row_sampler_opt) |*sampler| sampler.deinit();
 
     var i: usize = 0;
     while (i < offsets.len) {
-        const run = nextOffsetRun(center, offsets, i);
+        const run = nextOffsetRun(offsets, i);
         const run_width = rowRunWidth(run);
+        const run_z = center.z + run.z;
+        const run_min_x = center.x + run.min_x;
         var row_ready = false;
         var row_sampler_ptr: ?*CachedBiomeRowSampler = null;
         if (row_sampler_opt) |*row_sampler| {
             row_sampler_ptr = row_sampler;
-            row_ready = row_sampler.sampleRow(run.min_x, run.z, run_width);
+            row_ready = row_sampler.sampleRow(run_min_x, run_z, run_width);
         }
         var j = run.start;
         while (j < run.end) : (j += 1) {
             const off = offsets[j];
             const x = center.x + off.dx;
             const id = if (row_ready)
-                row_sampler_ptr.?.getBiomeAt(x - run.min_x)
+                row_sampler_ptr.?.getBiomeAt(x - run_min_x)
             else
-                sampleBiomeScalar(g, &sampler_opt, x, run.z, climate_bounds);
+                sampleBiomeScalar(g, &sampler_opt, x, run_z, climate_bounds);
             if (id == biome_id) {
                 count += 1;
                 if (count >= min_count) return true;
