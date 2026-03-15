@@ -1331,8 +1331,10 @@ fn combinedBiomeThreshold(
 
     const biome_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
 
-    // Biome ID cache: c.none = not yet computed
-    var biome_cache = [_]i32{c.none} ** MAX_BIOME_CACHE_POINTS;
+    // Biome ID cache. We only cache resolved biome IDs; c.none (fast-path
+    // infeasible) is intentionally left uncached so later biome phases can
+    // resample with their own climate bounds.
+    var biome_cache = [_]?i32{null} ** MAX_BIOME_CACHE_POINTS;
 
     // Get iteration list for offsets path
     var min_stride: i32 = 4;
@@ -1357,15 +1359,15 @@ fn combinedBiomeThreshold(
 
         if (use_points) {
             for (max_req.points, 0..) |pt, pi| {
-                var biome_id = biome_cache[pi];
-                if (biome_id == c.none) {
-                    // Not cached: compute with this biome's bounds
-                    biome_id = if (has_valid_bounds)
+                const biome_id: i32 = biome_cache[pi] orelse blk: {
+                    // Not cached: compute with this biome's bounds.
+                    const sampled = if (has_valid_bounds)
                         fastBiomeIdWithFeasibility(g, pt.x, pt.z, bounds.?)
                     else
                         c.getBiomeAt(g, 1, pt.x, 0, pt.z);
-                    biome_cache[pi] = biome_id;
-                }
+                    if (sampled != c.none) biome_cache[pi] = sampled;
+                    break :blk sampled;
+                };
                 if (biome_id == c.none) continue;
                 if (biome_id == req.biome_id and pt.dist2 <= req.radius2) {
                     count += 1;
@@ -1381,14 +1383,14 @@ fn combinedBiomeThreshold(
             for (iter_offsets, 0..) |off, oi| {
                 const x = anchor.x + off.dx;
                 const z = anchor.z + off.dz;
-                var biome_id = biome_cache[oi];
-                if (biome_id == c.none) {
-                    biome_id = if (has_valid_bounds)
+                const biome_id: i32 = biome_cache[oi] orelse blk: {
+                    const sampled = if (has_valid_bounds)
                         fastBiomeIdWithFeasibility(g, x, z, bounds.?)
                     else
                         c.getBiomeAt(g, 1, x, 0, z);
-                    biome_cache[oi] = biome_id;
-                }
+                    if (sampled != c.none) biome_cache[oi] = sampled;
+                    break :blk sampled;
+                };
                 if (biome_id == c.none) continue;
                 if (biome_id == req.biome_id and off.dist2 <= req.radius2) {
                     count += 1;
