@@ -1061,6 +1061,26 @@ pub fn biomeMatchesWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, m
     return biomeMatchesWithinRadiusWithBounds(g, center, biome_id, min_count, offsets, null);
 }
 
+/// Count biome matches up to max_needed, with early termination.
+/// Returns the number of matches found (capped at max_needed).
+fn countBiomeMatchesWithBounds(g: *c.Generator, center: c.Pos, biome_id: i32, max_needed: i32, offsets: []const BiomeOffset, climate_bounds: ?BiomeClimateBounds) i32 {
+    var count: i32 = 0;
+    const fast_enabled = fastBiomeSamplingEligible(g, climate_bounds);
+    var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
+    defer if (sampler_opt) |*sampler| sampler.deinit();
+
+    for (offsets) |off| {
+        const x = center.x + off.dx;
+        const z = center.z + off.dz;
+        const id = sampleBiomeScalar(g, &sampler_opt, x, z, climate_bounds);
+        if (id == biome_id) {
+            count += 1;
+            if (count >= max_needed) return count;
+        }
+    }
+    return count;
+}
+
 fn biomeMatchesPointsWithBounds(g: *c.Generator, biome_id: i32, min_count: i32, points: []const BiomePoint, climate_bounds: ?BiomeClimateBounds) bool {
     if (min_count <= 0) return true;
     var count: i32 = 0;
@@ -1467,6 +1487,20 @@ pub fn evalConstraintAt(
                         2 => if (req.coarse_offsets_2.len > 0) req.coarse_offsets_2 else req.offsets,
                         else => req.offsets,
                     };
+                    // Two-phase scan: when using full stride, try a coarse pre-scan
+                    // at stride=2 first. If the coarse pass finds >= min_count, accept.
+                    // If it finds 0, reject. Only fall back to the full scan in the
+                    // rare case where 0 < coarse_count < min_count.
+                    if (stride == 1 and req.min_count > 1 and req.coarse_offsets_2.len > 0 and
+                        req.coarse_offsets_2.len < req.offsets.len)
+                    {
+                        const coarse_count = countBiomeMatchesWithBounds(
+                            g, anchor, req.biome_id, req.min_count, req.coarse_offsets_2, req.climate_bounds,
+                        );
+                        if (coarse_count >= req.min_count) break :blk true;
+                        if (coarse_count == 0) break :blk false;
+                        // Uncertain: fall through to full-resolution scan
+                    }
                     break :blk biomeMatchesWithinRadiusWithBounds(g, anchor, req.biome_id, req.min_count, offsets, req.climate_bounds);
                 };
                 evals[idx].matched = matched;
