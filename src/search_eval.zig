@@ -169,12 +169,26 @@ pub fn isBiomeFeasible(bounds: BiomeClimateBounds, np_values: [6]i64, np_known: 
     return true;
 }
 
+/// Check whether a single climate dimension is within the biome's feasible
+/// range, clamping to the global tree bounds first.  This is the single-dim
+/// specialization of isBiomeFeasible — used inline in the fast path to avoid
+/// redundantly re-checking already-verified dimensions.
+inline fn isDimFeasible(bounds: BiomeClimateBounds, dim: usize, raw_v: i64) bool {
+    const g_lo = @as(i64, bounds.global[dim].lo);
+    const g_hi = @as(i64, bounds.global[dim].hi);
+    const v = @max(g_lo, @min(g_hi, raw_v));
+    return v >= @as(i64, bounds.ranges[dim].lo) and v <= @as(i64, bounds.ranges[dim].hi);
+}
+
 pub fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: BiomeClimateBounds) i32 {
     const bn = &g.unnamed_0.unnamed_1.bn;
     var np: [6]i64 = undefined;
-    var np_known: u6 = 0;
     const c_idx = @as(usize, @intCast(c.NP_CONTINENTALNESS));
     const e_idx = @as(usize, @intCast(c.NP_EROSION));
+    const w_idx = @as(usize, @intCast(c.NP_WEIRDNESS));
+    const d_idx = @as(usize, @intCast(c.NP_DEPTH));
+    const t_idx = @as(usize, @intCast(c.NP_TEMPERATURE));
+    const h_idx = @as(usize, @intCast(c.NP_HUMIDITY));
 
     var sx: c_int = undefined;
     var sy: c_int = undefined;
@@ -189,18 +203,15 @@ pub fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: Biome
 
     const c_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[c_idx], px, 0.0, pz)));
     np[c_idx] = @as(i64, @intFromFloat(10000.0 * c_val));
-    np_known |= npBit(c_idx);
-    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+    if (!isDimFeasible(bounds, c_idx, np[c_idx])) return c.none;
 
     const e_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[e_idx], px, 0.0, pz)));
     np[e_idx] = @as(i64, @intFromFloat(10000.0 * e_val));
-    np_known |= npBit(e_idx);
-    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+    if (!isDimFeasible(bounds, e_idx, np[e_idx])) return c.none;
 
-    const w_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_WEIRDNESS))], px, 0.0, pz)));
-    np[@as(usize, @intCast(c.NP_WEIRDNESS))] = @as(i64, @intFromFloat(10000.0 * w_val));
-    np_known |= npBit(@as(usize, @intCast(c.NP_WEIRDNESS)));
-    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+    const w_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[w_idx], px, 0.0, pz)));
+    np[w_idx] = @as(i64, @intFromFloat(10000.0 * w_val));
+    if (!isDimFeasible(bounds, w_idx, np[w_idx])) return c.none;
 
     const np_param: [4]f32 = .{
         c_val,
@@ -210,17 +221,15 @@ pub fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: Biome
     };
     const off = @as(f64, @floatCast(c.getSpline(bn.sp, @constCast(@ptrCast(&np_param))) + 0.014999999664723873));
     const d_val = @as(f32, @floatCast(((1.0 - (@as(f64, @floatFromInt(sy * 4)) / 128.0)) - (83.0 / 160.0)) + off));
-    np[@as(usize, @intCast(c.NP_DEPTH))] = @as(i64, @intFromFloat(10000.0 * d_val));
-    np_known |= npBit(@as(usize, @intCast(c.NP_DEPTH)));
-    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+    np[d_idx] = @as(i64, @intFromFloat(10000.0 * d_val));
+    if (!isDimFeasible(bounds, d_idx, np[d_idx])) return c.none;
 
-    const t_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_TEMPERATURE))], px, 0.0, pz)));
-    np[@as(usize, @intCast(c.NP_TEMPERATURE))] = @as(i64, @intFromFloat(10000.0 * t_val));
-    np_known |= npBit(@as(usize, @intCast(c.NP_TEMPERATURE)));
-    if (!isBiomeFeasible(bounds, np, np_known)) return c.none;
+    const t_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[t_idx], px, 0.0, pz)));
+    np[t_idx] = @as(i64, @intFromFloat(10000.0 * t_val));
+    if (!isDimFeasible(bounds, t_idx, np[t_idx])) return c.none;
 
-    const h_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[@as(usize, @intCast(c.NP_HUMIDITY))], px, 0.0, pz)));
-    np[@as(usize, @intCast(c.NP_HUMIDITY))] = @as(i64, @intFromFloat(10000.0 * h_val));
+    const h_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[h_idx], px, 0.0, pz)));
+    np[h_idx] = @as(i64, @intFromFloat(10000.0 * h_val));
 
     return c.climateToBiome(bn.mc, @ptrCast(@alignCast(&np)), null);
 }
