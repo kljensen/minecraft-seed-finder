@@ -49,21 +49,21 @@ pub inline fn floordiv(arg_a: i32, arg_b: i32) i32 {
     _ = &r;
     return q - @intFromBool(((a ^ b) < @as(c_int, 0)) and !!(r != 0));
 }
-pub fn setSeed(arg_seed: [*c]u64, arg_value: u64) callconv(.C) void {
+pub fn setSeed(arg_seed: [*c]u64, arg_value: u64) void {
     var seed = arg_seed;
     _ = &seed;
     var value = arg_value;
     _ = &value;
     seed.* = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, @bitCast(@as(c_ulonglong, value ^ @as(u64, @bitCast(@as(c_long, 25214903917)))))) & ((@as(c_ulonglong, 1) << @intCast(48)) -% @as(c_ulonglong, @bitCast(@as(c_longlong, @as(c_int, 1)))))))));
 }
-pub fn next(arg_seed: [*c]u64, bits: c_int) callconv(.C) c_int {
+pub fn next(arg_seed: [*c]u64, bits: c_int) c_int {
     var seed = arg_seed;
     _ = &seed;
     _ = &bits;
     seed.* = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, @bitCast(@as(c_ulonglong, (seed.* *% @as(u64, @bitCast(@as(c_long, 25214903917)))) +% @as(u64, @bitCast(@as(c_long, @as(c_int, 11))))))) & ((@as(c_ulonglong, 1) << @intCast(48)) -% @as(c_ulonglong, @bitCast(@as(c_longlong, @as(c_int, 1)))))))));
     return @as(c_int, @bitCast(@as(c_int, @truncate(@as(i64, @bitCast(seed.*)) >> @intCast(@as(c_int, 48) - bits)))));
 }
-pub fn nextInt(arg_seed: [*c]u64, n: c_int) callconv(.C) c_int {
+pub fn nextInt(arg_seed: [*c]u64, n: c_int) c_int {
     var seed = arg_seed;
     _ = &seed;
     _ = &n;
@@ -85,17 +85,17 @@ pub fn nextInt(arg_seed: [*c]u64, n: c_int) callconv(.C) c_int {
     }
     return val;
 }
-pub fn nextLong(arg_seed: [*c]u64) callconv(.C) u64 {
+pub fn nextLong(arg_seed: [*c]u64) u64 {
     var seed = arg_seed;
     _ = &seed;
     return (@as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 32))))) << @intCast(32)) +% @as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 32)))));
 }
-pub fn nextFloat(arg_seed: [*c]u64) callconv(.C) f32 {
+pub fn nextFloat(arg_seed: [*c]u64) f32 {
     var seed = arg_seed;
     _ = &seed;
     return @as(f32, @floatFromInt(next(seed, @as(c_int, 24)))) / @as(f32, @floatFromInt(@as(c_int, 1) << @intCast(24)));
 }
-pub fn nextDouble(arg_seed: [*c]u64) callconv(.C) f64 {
+pub fn nextDouble(arg_seed: [*c]u64) f64 {
     var seed = arg_seed;
     _ = &seed;
     var x: u64 = @as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 26)))));
@@ -104,7 +104,7 @@ pub fn nextDouble(arg_seed: [*c]u64) callconv(.C) f64 {
     x +%= @as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 27)))));
     return @as(f64, @floatFromInt(@as(i64, @bitCast(x)))) / @as(f64, @floatFromInt(@as(c_ulonglong, 1) << @intCast(53)));
 }
-pub fn skipNextN(arg_seed: [*c]u64, arg_n: u64) callconv(.C) void {
+pub fn skipNextN(arg_seed: [*c]u64, arg_n: u64) void {
     var seed = arg_seed;
     _ = &seed;
     var n = arg_n;
@@ -138,7 +138,7 @@ pub const struct_Xoroshiro = extern struct {
     hi: u64 = @import("std").mem.zeroes(u64),
 };
 pub const Xoroshiro = struct_Xoroshiro;
-pub fn xSetSeed(arg_xr: [*c]Xoroshiro, arg_value: u64) callconv(.C) void {
+pub fn xSetSeed(arg_xr: [*c]Xoroshiro, arg_value: u64) void {
     var xr = arg_xr;
     _ = &xr;
     var value = arg_value;
@@ -164,7 +164,7 @@ pub fn xSetSeed(arg_xr: [*c]Xoroshiro, arg_value: u64) callconv(.C) void {
     xr.*.lo = l;
     xr.*.hi = h;
 }
-pub fn xNextLong(arg_xr: [*c]Xoroshiro) callconv(.C) u64 {
+pub fn xNextLong(arg_xr: [*c]Xoroshiro) u64 {
     var xr = arg_xr;
     _ = &xr;
     var l: u64 = xr.*.lo;
@@ -178,7 +178,7 @@ pub fn xNextLong(arg_xr: [*c]Xoroshiro) callconv(.C) u64 {
     xr.*.hi = rotl64(h, @as(u8, @bitCast(@as(i8, @truncate(@as(c_int, 28))))));
     return n;
 }
-pub fn xNextInt(arg_xr: [*c]Xoroshiro, arg_n: u32) callconv(.C) c_int {
+pub fn xNextInt(arg_xr: [*c]Xoroshiro, arg_n: u32) c_int {
     var xr = arg_xr;
     _ = &xr;
     var n = arg_n;
@@ -192,17 +192,17 @@ pub fn xNextInt(arg_xr: [*c]Xoroshiro, arg_n: u32) callconv(.C) c_int {
     }
     return @as(c_int, @bitCast(@as(c_uint, @truncate(r >> @intCast(32)))));
 }
-pub fn xNextDouble(arg_xr: [*c]Xoroshiro) callconv(.C) f64 {
+pub fn xNextDouble(arg_xr: [*c]Xoroshiro) f64 {
     var xr = arg_xr;
     _ = &xr;
     return @as(f64, @floatFromInt(xNextLong(xr) >> @intCast(@as(c_int, 64) - @as(c_int, 53)))) * 0.00000000000000011102230246251565;
 }
-pub fn xNextFloat(arg_xr: [*c]Xoroshiro) callconv(.C) f32 {
+pub fn xNextFloat(arg_xr: [*c]Xoroshiro) f32 {
     var xr = arg_xr;
     _ = &xr;
     return @as(f32, @floatFromInt(xNextLong(xr) >> @intCast(@as(c_int, 64) - @as(c_int, 24)))) * 0.00000005960464477539063;
 }
-pub fn xSkipN(arg_xr: [*c]Xoroshiro, arg_count: c_int) callconv(.C) void {
+pub fn xSkipN(arg_xr: [*c]Xoroshiro, arg_count: c_int) void {
     var xr = arg_xr;
     _ = &xr;
     var count = arg_count;
@@ -216,7 +216,7 @@ pub fn xSkipN(arg_xr: [*c]Xoroshiro, arg_count: c_int) callconv(.C) void {
         _ = xNextLong(xr);
     }
 }
-pub fn xNextLongJ(arg_xr: [*c]Xoroshiro) callconv(.C) u64 {
+pub fn xNextLongJ(arg_xr: [*c]Xoroshiro) u64 {
     var xr = arg_xr;
     _ = &xr;
     var a: i32 = @as(i32, @bitCast(@as(c_uint, @truncate(xNextLong(xr) >> @intCast(32)))));
@@ -225,7 +225,7 @@ pub fn xNextLongJ(arg_xr: [*c]Xoroshiro) callconv(.C) u64 {
     _ = &b;
     return (@as(u64, @bitCast(@as(c_long, a))) << @intCast(32)) +% @as(u64, @bitCast(@as(c_long, b)));
 }
-pub fn xNextIntJ(arg_xr: [*c]Xoroshiro, arg_n: u32) callconv(.C) c_int {
+pub fn xNextIntJ(arg_xr: [*c]Xoroshiro, arg_n: u32) c_int {
     var xr = arg_xr;
     _ = &xr;
     var n = arg_n;
@@ -248,14 +248,14 @@ pub fn xNextIntJ(arg_xr: [*c]Xoroshiro, arg_n: u32) callconv(.C) c_int {
     }
     return val;
 }
-pub fn mcStepSeed(arg_s: u64, arg_salt: u64) callconv(.C) u64 {
+pub fn mcStepSeed(arg_s: u64, arg_salt: u64) u64 {
     var s = arg_s;
     _ = &s;
     var salt = arg_salt;
     _ = &salt;
     return @as(u64, @bitCast(@as(c_ulong, @truncate((@as(c_ulonglong, @bitCast(@as(c_ulonglong, s))) *% ((@as(c_ulonglong, @bitCast(@as(c_ulonglong, s))) *% @as(c_ulonglong, 6364136223846793005)) +% @as(c_ulonglong, 1442695040888963407))) +% @as(c_ulonglong, @bitCast(@as(c_ulonglong, salt)))))));
 }
-pub fn getLayerSalt(arg_salt: u64) callconv(.C) u64 {
+pub fn getLayerSalt(arg_salt: u64) u64 {
     var salt = arg_salt;
     _ = &salt;
     var ls: u64 = mcStepSeed(salt, salt);
@@ -264,7 +264,7 @@ pub fn getLayerSalt(arg_salt: u64) callconv(.C) u64 {
     ls = mcStepSeed(ls, salt);
     return ls;
 }
-pub fn lerp(arg_part: f64, arg_from: f64, arg_to: f64) callconv(.C) f64 {
+pub fn lerp(arg_part: f64, arg_from: f64, arg_to: f64) f64 {
     var part = arg_part;
     _ = &part;
     var from = arg_from;
@@ -273,7 +273,7 @@ pub fn lerp(arg_part: f64, arg_from: f64, arg_to: f64) callconv(.C) f64 {
     _ = &to;
     return from + (part * (to - from));
 }
-pub fn lerp2(arg_dx: f64, arg_dy: f64, arg_v00: f64, arg_v10: f64, arg_v01: f64, arg_v11: f64) callconv(.C) f64 {
+pub fn lerp2(arg_dx: f64, arg_dy: f64, arg_v00: f64, arg_v10: f64, arg_v01: f64, arg_v11: f64) f64 {
     var dx = arg_dx;
     _ = &dx;
     var dy = arg_dy;
@@ -288,7 +288,7 @@ pub fn lerp2(arg_dx: f64, arg_dy: f64, arg_v00: f64, arg_v10: f64, arg_v01: f64,
     _ = &v11;
     return lerp(dy, lerp(dx, v00, v10), lerp(dx, v01, v11));
 }
-pub fn lerp3(arg_dx: f64, arg_dy: f64, arg_dz: f64, arg_v000: f64, arg_v100: f64, arg_v010: f64, arg_v110: f64, arg_v001: f64, arg_v101: f64, arg_v011: f64, arg_v111: f64) callconv(.C) f64 {
+pub fn lerp3(arg_dx: f64, arg_dy: f64, arg_dz: f64, arg_v000: f64, arg_v100: f64, arg_v010: f64, arg_v110: f64, arg_v001: f64, arg_v101: f64, arg_v011: f64, arg_v111: f64) f64 {
     var dx = arg_dx;
     _ = &dx;
     var dy = arg_dy;
@@ -315,7 +315,7 @@ pub fn lerp3(arg_dx: f64, arg_dy: f64, arg_dz: f64, arg_v000: f64, arg_v100: f64
     v001 = lerp2(dx, dy, v001, v101, v011, v111);
     return lerp(dz, v000, v001);
 }
-pub fn clampedLerp(arg_part: f64, arg_from: f64, arg_to: f64) callconv(.C) f64 {
+pub fn clampedLerp(arg_part: f64, arg_from: f64, arg_to: f64) f64 {
     var part = arg_part;
     _ = &part;
     var from = arg_from;
@@ -362,12 +362,12 @@ pub const struct_DoublePerlinNoise = extern struct {
     octB: OctaveNoise = @import("std").mem.zeroes(OctaveNoise),
 };
 pub const DoublePerlinNoise = struct_DoublePerlinNoise;
-pub fn maintainPrecision(arg_x: f64) callconv(.C) f64 {
+pub fn maintainPrecision(arg_x: f64) f64 {
     var x = arg_x;
     _ = &x;
     return x;
 }
-pub fn perlinInit(arg_noise: [*c]PerlinNoise, arg_seed: [*c]u64) callconv(.C) void {
+pub fn perlinInit(arg_noise: [*c]PerlinNoise, arg_seed: [*c]u64) void {
     var noise = arg_noise;
     _ = &noise;
     var seed = arg_seed;
@@ -422,7 +422,7 @@ pub fn perlinInit(arg_noise: [*c]PerlinNoise, arg_seed: [*c]u64) callconv(.C) vo
     noise.*.d2 = d2;
     noise.*.t2 = ((d2 * d2) * d2) * ((d2 * ((d2 * 6.0) - 15.0)) + 10.0);
 }
-pub fn xPerlinInit(arg_noise: [*c]PerlinNoise, arg_xr: [*c]Xoroshiro) callconv(.C) void {
+pub fn xPerlinInit(arg_noise: [*c]PerlinNoise, arg_xr: [*c]Xoroshiro) void {
     var noise = arg_noise;
     _ = &noise;
     var xr = arg_xr;
@@ -477,7 +477,7 @@ pub fn xPerlinInit(arg_noise: [*c]PerlinNoise, arg_xr: [*c]Xoroshiro) callconv(.
     noise.*.d2 = d2;
     noise.*.t2 = ((d2 * d2) * d2) * ((d2 * ((d2 * 6.0) - 15.0)) + 10.0);
 }
-pub fn samplePerlin(arg_noise: [*c]const PerlinNoise, arg_d1: f64, arg_d2: f64, arg_d3: f64, arg_yamp: f64, arg_ymin: f64) callconv(.C) f64 {
+pub fn samplePerlin(arg_noise: [*c]const PerlinNoise, arg_d1: f64, arg_d2: f64, arg_d3: f64, arg_yamp: f64, arg_ymin: f64) f64 {
     var noise = arg_noise;
     _ = &noise;
     var d1 = arg_d1;
@@ -626,7 +626,7 @@ pub fn samplePerlin(arg_noise: [*c]const PerlinNoise, arg_d1: f64, arg_d2: f64, 
     l5 = lerp(t2, l5, l7);
     return lerp(t3, l1, l5);
 }
-pub fn sampleSimplex2D(arg_noise: [*c]const PerlinNoise, arg_x: f64, arg_y: f64) callconv(.C) f64 {
+pub fn sampleSimplex2D(arg_noise: [*c]const PerlinNoise, arg_x: f64, arg_y: f64) f64 {
     var noise = arg_noise;
     _ = &noise;
     var x = arg_x;
@@ -677,7 +677,7 @@ pub fn sampleSimplex2D(arg_noise: [*c]const PerlinNoise, arg_x: f64, arg_y: f64)
     t += simplexGrad(@import("std").zig.c_translation.signedRemainder(gi2, @as(c_int, 12)), x2, y2, 0.0, 0.5);
     return 70.0 * t;
 }
-pub fn octaveInit(arg_noise: [*c]OctaveNoise, arg_seed: [*c]u64, arg_octaves: [*c]PerlinNoise, arg_omin: c_int, arg_len: c_int) callconv(.C) void {
+pub fn octaveInit(arg_noise: [*c]OctaveNoise, arg_seed: [*c]u64, arg_octaves: [*c]PerlinNoise, arg_omin: c_int, arg_len: c_int) void {
     var noise = arg_noise;
     _ = &noise;
     var seed = arg_seed;
@@ -730,7 +730,7 @@ pub fn octaveInit(arg_noise: [*c]OctaveNoise, arg_seed: [*c]u64, arg_octaves: [*
     noise.*.octaves = octaves;
     noise.*.octcnt = len;
 }
-pub fn octaveInitBeta(arg_noise: [*c]OctaveNoise, arg_seed: [*c]u64, arg_octaves: [*c]PerlinNoise, arg_octcnt: c_int, arg_lac: f64, arg_lacMul: f64, arg_persist: f64, arg_persistMul: f64) callconv(.C) void {
+pub fn octaveInitBeta(arg_noise: [*c]OctaveNoise, arg_seed: [*c]u64, arg_octaves: [*c]PerlinNoise, arg_octcnt: c_int, arg_lac: f64, arg_lacMul: f64, arg_persist: f64, arg_persistMul: f64) void {
     var noise = arg_noise;
     _ = &noise;
     var seed = arg_seed;
@@ -771,7 +771,7 @@ pub fn octaveInitBeta(arg_noise: [*c]OctaveNoise, arg_seed: [*c]u64, arg_octaves
     noise.*.octaves = octaves;
     noise.*.octcnt = octcnt;
 }
-pub fn xOctaveInit(arg_noise: [*c]OctaveNoise, arg_xr: [*c]Xoroshiro, arg_octaves: [*c]PerlinNoise, arg_amplitudes: [*c]const f64, arg_omin: c_int, arg_len: c_int, arg_nmax: c_int) callconv(.C) c_int {
+pub fn xOctaveInit(arg_noise: [*c]OctaveNoise, arg_xr: [*c]Xoroshiro, arg_octaves: [*c]PerlinNoise, arg_amplitudes: [*c]const f64, arg_omin: c_int, arg_len: c_int, arg_nmax: c_int) c_int {
     var noise = arg_noise;
     _ = &noise;
     var xr = arg_xr;
@@ -932,7 +932,7 @@ pub fn xOctaveInit(arg_noise: [*c]OctaveNoise, arg_xr: [*c]Xoroshiro, arg_octave
     noise.*.octcnt = n;
     return n;
 }
-pub fn sampleOctave(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64, arg_z: f64) callconv(.C) f64 {
+pub fn sampleOctave(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64, arg_z: f64) f64 {
     var noise = arg_noise;
     _ = &noise;
     var x = arg_x;
@@ -965,7 +965,7 @@ pub fn sampleOctave(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64, ar
     }
     return v;
 }
-pub fn sampleOctaveAmp(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64, arg_z: f64, arg_yamp: f64, arg_ymin: f64, arg_ydefault: c_int) callconv(.C) f64 {
+pub fn sampleOctaveAmp(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64, arg_z: f64, arg_yamp: f64, arg_ymin: f64, arg_ydefault: c_int) f64 {
     var noise = arg_noise;
     _ = &noise;
     var x = arg_x;
@@ -1004,7 +1004,7 @@ pub fn sampleOctaveAmp(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64,
     }
     return v;
 }
-pub fn sampleOctaveBeta17Biome(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_z: f64) callconv(.C) f64 {
+pub fn sampleOctaveBeta17Biome(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_z: f64) f64 {
     var noise = arg_noise;
     _ = &noise;
     var x = arg_x;
@@ -1033,7 +1033,7 @@ pub fn sampleOctaveBeta17Biome(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg
     }
     return v;
 }
-pub fn sampleOctaveBeta17Terrain(arg_noise: [*c]const OctaveNoise, arg_v: [*c]f64, arg_x: f64, arg_z: f64, arg_yLacFlag: c_int, arg_lacmin: f64) callconv(.C) void {
+pub fn sampleOctaveBeta17Terrain(arg_noise: [*c]const OctaveNoise, arg_v: [*c]f64, arg_x: f64, arg_z: f64, arg_yLacFlag: c_int, arg_lacmin: f64) void {
     var noise = arg_noise;
     _ = &noise;
     var v = arg_v;
@@ -1066,7 +1066,7 @@ pub fn sampleOctaveBeta17Terrain(arg_noise: [*c]const OctaveNoise, arg_v: [*c]f6
         }
     }
 }
-pub fn doublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_seed: [*c]u64, arg_octavesA: [*c]PerlinNoise, arg_octavesB: [*c]PerlinNoise, arg_omin: c_int, arg_len: c_int) callconv(.C) void {
+pub fn doublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_seed: [*c]u64, arg_octavesA: [*c]PerlinNoise, arg_octavesB: [*c]PerlinNoise, arg_omin: c_int, arg_len: c_int) void {
     var noise = arg_noise;
     _ = &noise;
     var seed = arg_seed;
@@ -1083,7 +1083,7 @@ pub fn doublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_seed: [*c]u64, arg
     octaveInit(&noise.*.octA, seed, octavesA, omin, len);
     octaveInit(&noise.*.octB, seed, octavesB, omin, len);
 }
-pub fn xDoublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_xr: [*c]Xoroshiro, arg_octaves: [*c]PerlinNoise, arg_amplitudes: [*c]const f64, arg_omin: c_int, arg_len: c_int, arg_nmax: c_int) callconv(.C) c_int {
+pub fn xDoublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_xr: [*c]Xoroshiro, arg_octaves: [*c]PerlinNoise, arg_amplitudes: [*c]const f64, arg_omin: c_int, arg_len: c_int, arg_nmax: c_int) c_int {
     var noise = arg_noise;
     _ = &noise;
     var xr = arg_xr;
@@ -1168,7 +1168,7 @@ pub export fn sampleDoublePerlin(arg_noise: [*c]const DoublePerlinNoise, arg_x: 
 // stderr is defined at top of file as null (error logging disabled in pure Zig builds)
 pub const fprintf = libc_shim.fprintf;
 pub const printf = libc_shim.printf;
-pub fn indexedLerp(arg_idx: u8, arg_a: f64, arg_b: f64, arg_c: f64) callconv(.C) f64 {
+pub fn indexedLerp(arg_idx: u8, arg_a: f64, arg_b: f64, arg_c: f64) f64 {
     var idx = arg_idx;
     _ = &idx;
     var a = arg_a;
@@ -1202,7 +1202,7 @@ pub fn indexedLerp(arg_idx: u8, arg_a: f64, arg_b: f64, arg_c: f64) callconv(.C)
     __builtin_unreachable();
     return 0;
 }
-pub fn samplePerlinBeta17Terrain(arg_noise: [*c]const PerlinNoise, arg_v: [*c]f64, arg_d1: f64, arg_d3: f64, arg_yLacAmp: f64) callconv(.C) void {
+pub fn samplePerlinBeta17Terrain(arg_noise: [*c]const PerlinNoise, arg_v: [*c]f64, arg_d1: f64, arg_d3: f64, arg_yLacAmp: f64) void {
     var noise = arg_noise;
     _ = &noise;
     var v = arg_v;
@@ -1362,7 +1362,7 @@ pub fn samplePerlinBeta17Terrain(arg_noise: [*c]const PerlinNoise, arg_v: [*c]f6
         }
     }
 }
-pub fn simplexGrad(arg_idx: c_int, arg_x: f64, arg_y: f64, arg_z: f64, arg_d: f64) callconv(.C) f64 {
+pub fn simplexGrad(arg_idx: c_int, arg_x: f64, arg_y: f64, arg_z: f64, arg_d: f64) f64 {
     var idx = arg_idx;
     _ = &idx;
     var x = arg_x;
@@ -1504,7 +1504,7 @@ pub const deep_dark: c_int = 183;
 pub const mangrove_swamp: c_int = 184;
 pub const cherry_grove: c_int = 185;
 pub const pale_garden: c_int = 186;
-pub fn biomeExists(arg_mc: c_int, arg_id: c_int) callconv(.C) c_int {
+pub fn biomeExists(arg_mc: c_int, arg_id: c_int) c_int {
     var mc = arg_mc;
     _ = &mc;
     var id = arg_id;
@@ -1568,7 +1568,7 @@ pub fn biomeExists(arg_mc: c_int, arg_id: c_int) callconv(.C) c_int {
     }
     return 0;
 }
-pub fn isOverworld(arg_mc: c_int, arg_id: c_int) callconv(.C) c_int {
+pub fn isOverworld(arg_mc: c_int, arg_id: c_int) c_int {
     var mc = arg_mc;
     _ = &mc;
     var id = arg_id;
@@ -1590,7 +1590,7 @@ pub fn isOverworld(arg_mc: c_int, arg_id: c_int) callconv(.C) c_int {
     }
     return 1;
 }
-pub fn getCategory(arg_mc: c_int, arg_id: c_int) callconv(.C) c_int {
+pub fn getCategory(arg_mc: c_int, arg_id: c_int) c_int {
     var mc = arg_mc;
     _ = &mc;
     var id = arg_id;
@@ -1620,14 +1620,14 @@ pub fn getCategory(arg_mc: c_int, arg_id: c_int) callconv(.C) c_int {
     }
     return 0;
 }
-pub fn isDeepOcean(arg_id: c_int) callconv(.C) c_int {
+pub fn isDeepOcean(arg_id: c_int) c_int {
     var id = arg_id;
     _ = &id;
     const deep_bits: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate(((((@as(c_ulonglong, 1) << @intCast(deep_ocean)) | (@as(c_ulonglong, 1) << @intCast(deep_warm_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_lukewarm_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_cold_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_frozen_ocean))))));
     _ = &deep_bits;
     return @intFromBool((@as(u32, @bitCast(id)) < @as(u32, @bitCast(@as(c_int, 64)))) and (((@as(c_ulonglong, 1) << @intCast(id)) & @as(c_ulonglong, @bitCast(@as(c_ulonglong, deep_bits)))) != 0));
 }
-pub fn isOceanic(arg_id: c_int) callconv(.C) c_int {
+pub fn isOceanic(arg_id: c_int) c_int {
     var id = arg_id;
     _ = &id;
     const ocean_bits: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate((((((((((@as(c_ulonglong, 1) << @intCast(ocean)) | (@as(c_ulonglong, 1) << @intCast(frozen_ocean))) | (@as(c_ulonglong, 1) << @intCast(warm_ocean))) | (@as(c_ulonglong, 1) << @intCast(lukewarm_ocean))) | (@as(c_ulonglong, 1) << @intCast(cold_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_warm_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_lukewarm_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_cold_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_frozen_ocean))))));
@@ -1697,7 +1697,7 @@ pub const L_ZOOM_LARGE_A: c_int = 57;
 pub const L_ZOOM_LARGE_B: c_int = 58;
 pub const L_ZOOM_L_RIVER_A: c_int = 59;
 pub const L_ZOOM_L_RIVER_B: c_int = 60;
-pub const mapfunc_t = fn ([*c]const struct_Layer, [*c]c_int, c_int, c_int, c_int, c_int) callconv(.C) c_int;
+pub const mapfunc_t = fn ([*c]const struct_Layer, [*c]c_int, c_int, c_int, c_int, c_int) c_int;
 pub const Layer = struct_Layer;
 pub const struct_Layer = extern struct {
     getMap: ?*const mapfunc_t = @import("std").mem.zeroes(?*const mapfunc_t),
@@ -1723,7 +1723,7 @@ pub const struct_LayerStack = extern struct {
     oceanRnd: PerlinNoise = @import("std").mem.zeroes(PerlinNoise),
 };
 pub const LayerStack = struct_LayerStack;
-pub fn setLayerSeed(arg_layer: [*c]Layer, arg_worldSeed: u64) callconv(.C) void {
+pub fn setLayerSeed(arg_layer: [*c]Layer, arg_worldSeed: u64) void {
     var layer = arg_layer;
     _ = &layer;
     var worldSeed = arg_worldSeed;
@@ -1758,123 +1758,123 @@ pub fn setLayerSeed(arg_layer: [*c]Layer, arg_worldSeed: u64) callconv(.C) void 
         layer.*.startSeed = mcStepSeed(st, @as(u64, @bitCast(@as(c_long, @as(c_int, 0)))));
     }
 }
-pub fn mapContinent(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapContinent(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapZoomFuzzy(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapZoomFuzzy(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapZoom(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapZoom(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapLand(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapLand(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapLand16(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapLand16(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapLandB18(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapLandB18(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapIsland(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapIsland(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapSnow(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapSnow(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapSnow16(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapSnow16(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapCool(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapCool(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapHeat(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapHeat(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapSpecial(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapSpecial(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapMushroom(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapMushroom(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapDeepOcean(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapDeepOcean(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], deep_ocean);
     return 0;
 }
-pub fn mapBiome(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapBiome(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapBamboo(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapBamboo(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapNoise(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapNoise(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapBiomeEdge(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapBiomeEdge(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapHills(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapHills(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapRiver(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapRiver(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], river);
     return 0;
 }
-pub fn mapSmooth(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapSmooth(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapSunflower(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapSunflower(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapShore(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapShore(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], beach);
     return 0;
 }
-pub fn mapSwampRiver(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapSwampRiver(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], swamp);
     return 0;
 }
-pub fn mapRiverMix(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapRiverMix(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapOceanTemp(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapOceanTemp(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapOceanMix(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapOceanMix(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-pub fn mapVoronoi(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapVoronoi(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn mapVoronoi114(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
+pub fn mapVoronoi114(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-pub fn getVoronoiSHA(arg_seed: u64) callconv(.C) u64 {
+pub fn getVoronoiSHA(arg_seed: u64) u64 {
     var seed = arg_seed;
     _ = &seed;
     const K = struct {
@@ -2119,7 +2119,7 @@ pub export fn voronoiAccess3D(arg_sha: u64, arg_x: c_int, arg_y: c_int, arg_z: c
     }
 }
 
-pub fn mapVoronoiPlane(_: u64, out: [*c]c_int, src: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int, _: c_int, _: c_int, _: c_int, _: c_int, _: c_int) callconv(.C) void {
+pub fn mapVoronoiPlane(_: u64, out: [*c]c_int, src: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int, _: c_int, _: c_int, _: c_int, _: c_int, _: c_int) void {
     const n = @as(usize, @intCast(w * h));
     var i: usize = 0;
     while (i < n) : (i += 1) out[i] = src[i];
@@ -2191,7 +2191,7 @@ pub export const oldBiomes11: [6]c_int = [6]c_int{
     plains,
     taiga,
 };
-pub fn getVoronoiCell(arg_sha: u64, arg_a: c_int, arg_b: c_int, arg_c: c_int, arg_x: [*c]c_int, arg_y: [*c]c_int, arg_z: [*c]c_int) callconv(.C) void {
+pub fn getVoronoiCell(arg_sha: u64, arg_a: c_int, arg_b: c_int, arg_c: c_int, arg_x: [*c]c_int, arg_y: [*c]c_int, arg_z: [*c]c_int) void {
     var sha = arg_sha;
     _ = &sha;
     var a = arg_a;
@@ -2323,7 +2323,7 @@ pub const struct_BiomeTree = extern struct {
     len: u32 = @import("std").mem.zeroes(u32),
 };
 pub const BiomeTree = struct_BiomeTree;
-pub fn initSurfaceNoise(arg_sn: [*c]SurfaceNoise, arg_dim: c_int, arg_seed: u64) callconv(.C) void {
+pub fn initSurfaceNoise(arg_sn: [*c]SurfaceNoise, arg_dim: c_int, arg_seed: u64) void {
     var sn = arg_sn;
     _ = &sn;
     var dim = arg_dim;
@@ -2351,7 +2351,7 @@ pub fn initSurfaceNoise(arg_sn: [*c]SurfaceNoise, arg_dim: c_int, arg_seed: u64)
         sn.*.yFactor = 160;
     }
 }
-pub fn initSurfaceNoiseBeta(arg_snb: [*c]SurfaceNoiseBeta, arg_seed: u64) callconv(.C) void {
+pub fn initSurfaceNoiseBeta(arg_snb: [*c]SurfaceNoiseBeta, arg_seed: u64) void {
     var snb = arg_snb;
     _ = &snb;
     var seed = arg_seed;
@@ -2366,7 +2366,7 @@ pub fn initSurfaceNoiseBeta(arg_snb: [*c]SurfaceNoiseBeta, arg_seed: u64) callco
     octaveInitBeta(&snb.*.octcontA, &s, @as([*c]PerlinNoise, @ptrCast(@alignCast(&snb.*.oct))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 40))))), @as(c_int, 10), 1.121, 0.5, 1.0, 2.0);
     octaveInitBeta(&snb.*.octcontB, &s, @as([*c]PerlinNoise, @ptrCast(@alignCast(&snb.*.oct))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 50))))), @as(c_int, 16), 200.0, 0.5, 1.0, 2.0);
 }
-pub fn sampleSurfaceNoise(arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_y: c_int, arg_z: c_int) callconv(.C) f64 {
+pub fn sampleSurfaceNoise(arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_y: c_int, arg_z: c_int) f64 {
     var sn = arg_sn;
     _ = &sn;
     var x = arg_x;
@@ -2438,7 +2438,7 @@ pub fn sampleSurfaceNoise(arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_y: c
     }
     return clampedLerp(0.5 + (0.05 * mainNoise), minNoise / 512.0, maxNoise / 512.0);
 }
-pub fn sampleSurfaceNoiseBetween(arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_noiseMin: f64, arg_noiseMax: f64) callconv(.C) f64 {
+pub fn sampleSurfaceNoiseBetween(arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_noiseMin: f64, arg_noiseMax: f64) f64 {
     var sn = arg_sn;
     _ = &sn;
     var x = arg_x;
@@ -2523,7 +2523,7 @@ pub fn sampleSurfaceNoiseBetween(arg_sn: [*c]const SurfaceNoise, arg_x: c_int, a
     }
     return clampedLerp(vmain, vmin, vmax);
 }
-pub fn setNetherSeed(arg_nn: [*c]NetherNoise, arg_seed: u64) callconv(.C) void {
+pub fn setNetherSeed(arg_nn: [*c]NetherNoise, arg_seed: u64) void {
     var nn = arg_nn;
     _ = &nn;
     var seed = arg_seed;
@@ -2535,7 +2535,7 @@ pub fn setNetherSeed(arg_nn: [*c]NetherNoise, arg_seed: u64) callconv(.C) void {
     setSeed(&s, seed +% @as(u64, @bitCast(@as(c_long, @as(c_int, 1)))));
     doublePerlinInit(&nn.*.humidity, &s, &nn.*.oct[@as(c_uint, @intCast(@as(c_int, 4)))], &nn.*.oct[@as(c_uint, @intCast(@as(c_int, 6)))], -@as(c_int, 7), @as(c_int, 2));
 }
-pub fn getNetherBiome(arg_nn: [*c]const NetherNoise, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_ndel: [*c]f32) callconv(.C) c_int {
+pub fn getNetherBiome(arg_nn: [*c]const NetherNoise, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_ndel: [*c]f32) c_int {
     var nn = arg_nn;
     _ = &nn;
     var x = arg_x;
@@ -2616,7 +2616,7 @@ pub fn getNetherBiome(arg_nn: [*c]const NetherNoise, arg_x: c_int, arg_y: c_int,
     id = @as(c_int, @intFromFloat(npoints[@as(c_uint, @intCast(id))][@as(c_uint, @intCast(@as(c_int, 3)))]));
     return id;
 }
-pub fn mapNether3D(arg_nn: [*c]const NetherNoise, arg_out: [*c]c_int, arg_r: Range, arg_confidence: f32) callconv(.C) c_int {
+pub fn mapNether3D(arg_nn: [*c]const NetherNoise, arg_out: [*c]c_int, arg_r: Range, arg_confidence: f32) c_int {
     var nn = arg_nn;
     _ = &nn;
     var out = arg_out;
@@ -2686,7 +2686,7 @@ pub fn mapNether3D(arg_nn: [*c]const NetherNoise, arg_out: [*c]c_int, arg_r: Ran
     }
     return 0;
 }
-pub fn genNetherScaled(arg_nn: [*c]const NetherNoise, arg_out: [*c]c_int, arg_r: Range, arg_mc: c_int, arg_sha: u64) callconv(.C) c_int {
+pub fn genNetherScaled(arg_nn: [*c]const NetherNoise, arg_out: [*c]c_int, arg_r: Range, arg_mc: c_int, arg_sha: u64) c_int {
     var nn = arg_nn;
     _ = &nn;
     var out = arg_out;
@@ -2777,7 +2777,7 @@ pub fn genNetherScaled(arg_nn: [*c]const NetherNoise, arg_out: [*c]c_int, arg_r:
     }
     return 0;
 }
-pub fn setEndSeed(arg_en: [*c]EndNoise, arg_mc: c_int, arg_seed: u64) callconv(.C) void {
+pub fn setEndSeed(arg_en: [*c]EndNoise, arg_mc: c_int, arg_seed: u64) void {
     var en = arg_en;
     _ = &en;
     var mc = arg_mc;
@@ -2791,7 +2791,7 @@ pub fn setEndSeed(arg_en: [*c]EndNoise, arg_mc: c_int, arg_seed: u64) callconv(.
     perlinInit(&en.*.perlin, &s);
     en.*.mc = mc;
 }
-pub fn mapEndBiome(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int) callconv(.C) c_int {
+pub fn mapEndBiome(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int) c_int {
     var en = arg_en;
     _ = &en;
     var out = arg_out;
@@ -2887,7 +2887,7 @@ pub fn mapEndBiome(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_x: c_int,
     free(@as(?*anyopaque, @ptrCast(hmap)));
     return 0;
 }
-pub fn mapEnd(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int) callconv(.C) c_int {
+pub fn mapEnd(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int) c_int {
     var en = arg_en;
     _ = &en;
     var out = arg_out;
@@ -2941,7 +2941,7 @@ pub fn mapEnd(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_x: c_int, arg_
     free(@as(?*anyopaque, @ptrCast(buf)));
     return 0;
 }
-pub fn mapEndSurfaceHeight(arg_y: [*c]f32, arg_en: [*c]const EndNoise, arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int, arg_scale: c_int, arg_ymin: c_int) callconv(.C) c_int {
+pub fn mapEndSurfaceHeight(arg_y: [*c]f32, arg_en: [*c]const EndNoise, arg_sn: [*c]const SurfaceNoise, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int, arg_scale: c_int, arg_ymin: c_int) c_int {
     var y = arg_y;
     _ = &y;
     var en = arg_en;
@@ -3044,7 +3044,7 @@ pub fn mapEndSurfaceHeight(arg_y: [*c]f32, arg_en: [*c]const EndNoise, arg_sn: [
     free(@as(?*anyopaque, @ptrCast(buf)));
     return 0;
 }
-pub fn genEndScaled(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_r: Range, arg_mc: c_int, arg_sha: u64) callconv(.C) c_int {
+pub fn genEndScaled(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_r: Range, arg_mc: c_int, arg_sha: u64) c_int {
     var en = arg_en;
     _ = &en;
     var out = arg_out;
@@ -3192,7 +3192,7 @@ pub fn genEndScaled(arg_en: [*c]const EndNoise, arg_out: [*c]c_int, arg_r: Range
 pub const SAMPLE_NO_SHIFT: c_int = 1;
 pub const SAMPLE_NO_DEPTH: c_int = 2;
 pub const SAMPLE_NO_BIOME: c_int = 4;
-pub fn initBiomeNoise(arg_bn: [*c]BiomeNoise, arg_mc: c_int) callconv(.C) void {
+pub fn initBiomeNoise(arg_bn: [*c]BiomeNoise, arg_mc: c_int) void {
     var bn = arg_bn;
     _ = &bn;
     var mc = arg_mc;
@@ -3229,7 +3229,7 @@ pub fn initBiomeNoise(arg_bn: [*c]BiomeNoise, arg_mc: c_int) callconv(.C) void {
     bn.*.sp = sp;
     bn.*.mc = mc;
 }
-pub fn setBiomeSeed(arg_bn: [*c]BiomeNoise, arg_seed: u64, arg_large: c_int) callconv(.C) void {
+pub fn setBiomeSeed(arg_bn: [*c]BiomeNoise, arg_seed: u64, arg_large: c_int) void {
     var bn = arg_bn;
     _ = &bn;
     var seed = arg_seed;
@@ -3256,7 +3256,7 @@ pub fn setBiomeSeed(arg_bn: [*c]BiomeNoise, arg_seed: u64, arg_large: c_int) cal
     }
     bn.*.nptype = -@as(c_int, 1);
 }
-pub fn setBetaBiomeSeed(arg_bnb: [*c]BiomeNoiseBeta, arg_seed: u64) callconv(.C) void {
+pub fn setBetaBiomeSeed(arg_bnb: [*c]BiomeNoiseBeta, arg_seed: u64) void {
     var bnb = arg_bnb;
     _ = &bnb;
     var seed = arg_seed;
@@ -3271,7 +3271,7 @@ pub fn setBetaBiomeSeed(arg_bnb: [*c]BiomeNoiseBeta, arg_seed: u64) callconv(.C)
     octaveInitBeta(@as([*c]OctaveNoise, @ptrCast(@alignCast(&bnb.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 2))))), &seedScratch, @as([*c]PerlinNoise, @ptrCast(@alignCast(&bnb.*.oct))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 8))))), @as(c_int, 2), 0.25 / 1.5, 10.0 / @as(f64, @floatFromInt(@as(c_int, 17))), 0.55, 2.0);
     bnb.*.nptype = -@as(c_int, 1);
 }
-pub fn sampleBiomeNoise(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_dat: [*c]u64, arg_sample_flags: u32) callconv(.C) c_int {
+pub fn sampleBiomeNoise(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_dat: [*c]u64, arg_sample_flags: u32) c_int {
     var bn = arg_bn;
     _ = &bn;
     var np = arg_np;
@@ -3348,7 +3348,7 @@ pub fn sampleBiomeNoise(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: c_
     }
     return id;
 }
-pub fn sampleBiomeNoiseBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_np: [*c]i64, arg_nv: [*c]f64, arg_x: c_int, arg_z: c_int) callconv(.C) c_int {
+pub fn sampleBiomeNoiseBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_np: [*c]i64, arg_nv: [*c]f64, arg_x: c_int, arg_z: c_int) c_int {
     var bnb = arg_bnb;
     _ = &bnb;
     var np = arg_np;
@@ -3384,7 +3384,7 @@ pub fn sampleBiomeNoiseBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_np: [*c]i64, 
     }
     return getOldBetaBiome(@as(f32, @floatCast(t)), @as(f32, @floatCast(h)));
 }
-pub fn approxSurfaceBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]const SurfaceNoiseBeta, arg_x: c_int, arg_z: c_int) callconv(.C) f64 {
+pub fn approxSurfaceBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]const SurfaceNoiseBeta, arg_x: c_int, arg_z: c_int) f64 {
     var bnb = arg_bnb;
     _ = &bnb;
     var snb = arg_snb;
@@ -3404,7 +3404,7 @@ pub fn approxSurfaceBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]const S
     processColumnNoise(@as([*c]f64, @ptrCast(@alignCast(&cols))), &colNoise, @as([*c]f64, @ptrCast(@alignCast(&climate))));
     return @as(f64, @floatFromInt(@as(c_int, 63))) + (((cols[@as(c_uint, @intCast(@as(c_int, 0)))] * 0.125) + (cols[@as(c_uint, @intCast(@as(c_int, 1)))] * 0.875)) * 0.5);
 }
-pub fn getOldBetaBiome(arg_t: f32, arg_h: f32) callconv(.C) c_int {
+pub fn getOldBetaBiome(arg_t: f32, arg_h: f32) c_int {
     var t = arg_t;
     _ = &t;
     var h = arg_h;
@@ -7615,7 +7615,7 @@ pub export fn climateToBiome(arg_mc: c_int, np: [*c]const u64, arg_dat: [*c]u64)
         if (tmp >= 0) break :blk bt.*.nodes + @as(usize, @intCast(tmp)) else break :blk bt.*.nodes - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
     }).* >> @intCast(48)) & @as(u64, @bitCast(@as(c_long, @as(c_int, 255))))))));
 }
-pub fn sampleClimatePara(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: f64, arg_z: f64) callconv(.C) f64 {
+pub fn sampleClimatePara(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: f64, arg_z: f64) f64 {
     var bn = arg_bn;
     _ = &bn;
     var np = arg_np;
@@ -7665,7 +7665,7 @@ pub fn sampleClimatePara(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: f
     }
     return p;
 }
-pub fn genBiomeNoiseScaled(arg_bn: [*c]const BiomeNoise, arg_out: [*c]c_int, arg_r: Range, arg_sha: u64) callconv(.C) c_int {
+pub fn genBiomeNoiseScaled(arg_bn: [*c]const BiomeNoise, arg_out: [*c]c_int, arg_r: Range, arg_sha: u64) c_int {
     var bn = arg_bn;
     _ = &bn;
     var out = arg_out;
@@ -7737,7 +7737,7 @@ pub fn genBiomeNoiseScaled(arg_bn: [*c]const BiomeNoise, arg_out: [*c]c_int, arg
     }
     return 0;
 }
-pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]const SurfaceNoiseBeta, arg_out: [*c]c_int, arg_r: Range) callconv(.C) c_int {
+pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]const SurfaceNoiseBeta, arg_out: [*c]c_int, arg_r: Range) c_int {
     var bnb = arg_bnb;
     _ = &bnb;
     var snb = arg_snb;
@@ -7952,7 +7952,7 @@ pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]c
     }
     return 0;
 }
-pub fn getBiomeDepthAndScale(arg_id: c_int, arg_depth: [*c]f64, arg_scale: [*c]f64, arg_grass: [*c]c_int) callconv(.C) c_int {
+pub fn getBiomeDepthAndScale(arg_id: c_int, arg_depth: [*c]f64, arg_scale: [*c]f64, arg_grass: [*c]c_int) c_int {
     var id = arg_id;
     _ = &id;
     var depth = arg_depth;
@@ -8394,7 +8394,7 @@ pub fn getBiomeDepthAndScale(arg_id: c_int, arg_depth: [*c]f64, arg_scale: [*c]f
     }
     return 1;
 }
-pub fn getVoronoiSrcRange(arg_r: Range) callconv(.C) Range {
+pub fn getVoronoiSrcRange(arg_r: Range) Range {
     var r = arg_r;
     _ = &r;
     if (r.scale != @as(c_int, 1)) {
@@ -8448,7 +8448,7 @@ pub const btree21wd_order = btree_data.btree21wd_order;
 pub const btree21wd_steps = btree_data.btree21wd_steps;
 pub const btree21wd_param = btree_data.btree21wd_param;
 pub const btree21wd_nodes = btree_data.btree21wd_nodes;
-pub fn fillRad3D(arg_out: [*c]c_int, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_sx: c_int, arg_sy: c_int, arg_sz: c_int, arg_id: c_int, arg_rad: f32) callconv(.C) void {
+pub fn fillRad3D(arg_out: [*c]c_int, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_sx: c_int, arg_sy: c_int, arg_sz: c_int, arg_id: c_int, arg_rad: f32) void {
     var out = arg_out;
     _ = &out;
     var x = arg_x;
@@ -8521,7 +8521,7 @@ pub fn fillRad3D(arg_out: [*c]c_int, arg_x: c_int, arg_y: c_int, arg_z: c_int, a
         }
     }
 }
-pub fn getEndBiome(arg_hx: c_int, arg_hz: c_int, arg_hmap: [*c]const u16, arg_hw: c_int) callconv(.C) c_int {
+pub fn getEndBiome(arg_hx: c_int, arg_hz: c_int, arg_hmap: [*c]const u16, arg_hw: c_int) c_int {
     var hx = arg_hx;
     _ = &hx;
     var hz = arg_hz;
@@ -9107,7 +9107,7 @@ pub fn getEndBiome(arg_hx: c_int, arg_hz: c_int, arg_hmap: [*c]const u16, arg_hw
     if (h < @as(u32, @bitCast(@as(c_int, 3600)))) return end_highlands else if (h <= @as(u32, @bitCast(@as(c_int, 10000)))) return end_midlands else if (h <= @as(u32, @bitCast(@as(c_int, 14400)))) return end_barrens;
     return small_end_islands;
 }
-pub fn getEndHeightNoise(arg_en: [*c]const EndNoise, arg_x: c_int, arg_z: c_int, arg_range: c_int) callconv(.C) f32 {
+pub fn getEndHeightNoise(arg_en: [*c]const EndNoise, arg_x: c_int, arg_z: c_int, arg_range: c_int) f32 {
     var en = arg_en;
     _ = &en;
     var x = arg_x;
@@ -9172,7 +9172,7 @@ pub fn getEndHeightNoise(arg_en: [*c]const EndNoise, arg_x: c_int, arg_z: c_int,
     }
     return ret;
 }
-pub fn sampleNoiseColumnEnd(arg_column: [*c]f64, arg_sn: [*c]const SurfaceNoise, arg_en: [*c]const EndNoise, arg_x: c_int, arg_z: c_int, arg_colymin: c_int, arg_colymax: c_int) callconv(.C) void {
+pub fn sampleNoiseColumnEnd(arg_column: [*c]f64, arg_sn: [*c]const SurfaceNoise, arg_en: [*c]const EndNoise, arg_x: c_int, arg_z: c_int, arg_colymin: c_int, arg_colymax: c_int) void {
     var column = arg_column;
     _ = &column;
     var sn = arg_sn;
@@ -9306,7 +9306,7 @@ pub fn sampleNoiseColumnEnd(arg_column: [*c]f64, arg_sn: [*c]const SurfaceNoise,
         }
     }
 }
-pub fn getSurfaceHeight(ncol00: [*c]const f64, ncol01: [*c]const f64, ncol10: [*c]const f64, ncol11: [*c]const f64, arg_colymin: c_int, arg_colymax: c_int, arg_blockspercell: c_int, arg_dx: f64, arg_dz: f64) callconv(.C) c_int {
+pub fn getSurfaceHeight(ncol00: [*c]const f64, ncol01: [*c]const f64, ncol10: [*c]const f64, ncol11: [*c]const f64, arg_colymin: c_int, arg_colymax: c_int, arg_blockspercell: c_int, arg_dx: f64, arg_dz: f64) c_int {
     _ = &ncol00;
     _ = &ncol01;
     _ = &ncol10;
@@ -9384,7 +9384,7 @@ pub fn getSurfaceHeight(ncol00: [*c]const f64, ncol01: [*c]const f64, ncol10: [*
     }
     return 0;
 }
-pub fn init_climate_seed(arg_dpn: [*c]DoublePerlinNoise, arg_oct: [*c]PerlinNoise, arg_xlo: u64, arg_xhi: u64, arg_large: c_int, arg_nptype: c_int, arg_nmax: c_int) callconv(.C) c_int {
+pub fn init_climate_seed(arg_dpn: [*c]DoublePerlinNoise, arg_oct: [*c]PerlinNoise, arg_xlo: u64, arg_xhi: u64, arg_large: c_int, arg_nptype: c_int, arg_nmax: c_int) c_int {
     var dpn = arg_dpn;
     _ = &dpn;
     var oct = arg_oct;
@@ -9532,7 +9532,7 @@ pub const SP_CONTINENTALNESS: c_int = 0;
 pub const SP_EROSION: c_int = 1;
 pub const SP_RIDGES: c_int = 2;
 pub const SP_WEIRDNESS: c_int = 3;
-pub fn addSplineVal(arg_rsp: [*c]Spline, arg_loc: f32, arg_val: [*c]Spline, arg_der: f32) callconv(.C) void {
+pub fn addSplineVal(arg_rsp: [*c]Spline, arg_loc: f32, arg_val: [*c]Spline, arg_der: f32) void {
     var rsp = arg_rsp;
     _ = &rsp;
     var loc = arg_loc;
@@ -9546,7 +9546,7 @@ pub fn addSplineVal(arg_rsp: [*c]Spline, arg_loc: f32, arg_val: [*c]Spline, arg_
     rsp.*.der[@as(c_uint, @intCast(rsp.*.len))] = der;
     rsp.*.len += 1;
 }
-pub fn createFixSpline(arg_ss: [*c]SplineStack, arg_val: f32) callconv(.C) [*c]Spline {
+pub fn createFixSpline(arg_ss: [*c]SplineStack, arg_val: f32) [*c]Spline {
     var ss = arg_ss;
     _ = &ss;
     var val = arg_val;
@@ -9562,7 +9562,7 @@ pub fn createFixSpline(arg_ss: [*c]SplineStack, arg_val: f32) callconv(.C) [*c]S
     sp.*.val = val;
     return @as([*c]Spline, @ptrCast(@alignCast(sp)));
 }
-pub fn getOffsetValue(arg_weirdness: f32, arg_continentalness: f32) callconv(.C) f32 {
+pub fn getOffsetValue(arg_weirdness: f32, arg_continentalness: f32) f32 {
     var weirdness = arg_weirdness;
     _ = &weirdness;
     var continentalness = arg_continentalness;
@@ -9578,7 +9578,7 @@ pub fn getOffsetValue(arg_weirdness: f32, arg_continentalness: f32) callconv(.C)
     if (weirdness < -0.699999988079071) return if (off > -0.22220000624656677) off else -0.22220000624656677 else return if (off > @as(f32, @floatFromInt(@as(c_int, 0)))) off else @as(f32, @floatFromInt(@as(c_int, 0)));
     return 0;
 }
-pub fn createSpline_38219(arg_ss: [*c]SplineStack, arg_f: f32, arg_bl: c_int) callconv(.C) [*c]Spline {
+pub fn createSpline_38219(arg_ss: [*c]SplineStack, arg_f: f32, arg_bl: c_int) [*c]Spline {
     var ss = arg_ss;
     _ = &ss;
     var f = arg_f;
@@ -9634,7 +9634,7 @@ pub fn createSpline_38219(arg_ss: [*c]SplineStack, arg_f: f32, arg_bl: c_int) ca
     }
     return sp;
 }
-pub fn createFlatOffsetSpline(arg_ss: [*c]SplineStack, arg_f: f32, arg_g: f32, arg_h: f32, arg_i: f32, arg_j: f32, arg_k: f32) callconv(.C) [*c]Spline {
+pub fn createFlatOffsetSpline(arg_ss: [*c]SplineStack, arg_f: f32, arg_g: f32, arg_h: f32, arg_i: f32, arg_j: f32, arg_k: f32) [*c]Spline {
     var ss = arg_ss;
     _ = &ss;
     var f = arg_f;
@@ -9671,7 +9671,7 @@ pub fn createFlatOffsetSpline(arg_ss: [*c]SplineStack, arg_f: f32, arg_g: f32, a
     addSplineVal(sp, 1.0, createFixSpline(ss, j), 0.699999988079071 * (j - i));
     return sp;
 }
-pub fn createLandSpline(arg_ss: [*c]SplineStack, arg_f: f32, arg_g: f32, arg_h: f32, arg_i: f32, arg_j: f32, arg_k: f32, arg_bl: c_int) callconv(.C) [*c]Spline {
+pub fn createLandSpline(arg_ss: [*c]SplineStack, arg_f: f32, arg_g: f32, arg_h: f32, arg_i: f32, arg_j: f32, arg_k: f32, arg_bl: c_int) [*c]Spline {
     var ss = arg_ss;
     _ = &ss;
     var f = arg_f;
@@ -9795,7 +9795,7 @@ pub export fn getSpline(arg_sp: [*c]const Spline, arg_vals: [*c]const f32) f32 {
     _ = &r;
     return r;
 }
-pub fn get_np_dist(np: [*c]const u64, arg_bt: [*c]const BiomeTree, arg_idx: c_int) callconv(.C) u64 {
+pub fn get_np_dist(np: [*c]const u64, arg_bt: [*c]const BiomeTree, arg_idx: c_int) u64 {
     _ = &np;
     var bt = arg_bt;
     _ = &bt;
@@ -9835,7 +9835,7 @@ pub fn get_np_dist(np: [*c]const u64, arg_bt: [*c]const BiomeTree, arg_idx: c_in
     }
     return ds;
 }
-pub fn get_resulting_node(np: [*c]const u64, arg_bt: [*c]const BiomeTree, arg_idx: c_int, arg_alt: c_int, arg_ds: u64, arg_depth: c_int) callconv(.C) c_int {
+pub fn get_resulting_node(np: [*c]const u64, arg_bt: [*c]const BiomeTree, arg_idx: c_int, arg_alt: c_int, arg_ds: u64, arg_depth: c_int) c_int {
     _ = &np;
     var bt = arg_bt;
     _ = &bt;
@@ -9907,7 +9907,7 @@ pub fn get_resulting_node(np: [*c]const u64, arg_bt: [*c]const BiomeTree, arg_id
     }
     return leaf;
 }
-pub fn genBiomeNoise3D(arg_bn: [*c]const BiomeNoise, arg_out: [*c]c_int, arg_r: Range, arg_opt: c_int) callconv(.C) void {
+pub fn genBiomeNoise3D(arg_bn: [*c]const BiomeNoise, arg_out: [*c]c_int, arg_r: Range, arg_opt: c_int) void {
     var bn = arg_bn;
     _ = &bn;
     var out = arg_out;
@@ -9958,7 +9958,7 @@ pub fn genBiomeNoise3D(arg_bn: [*c]const BiomeNoise, arg_out: [*c]c_int, arg_r: 
         }
     }
 }
-pub fn genColumnNoise(arg_snb: [*c]const SurfaceNoiseBeta, arg_dest: [*c]SeaLevelColumnNoiseBeta, arg_cx: f64, arg_cz: f64, arg_lacmin: f64) callconv(.C) void {
+pub fn genColumnNoise(arg_snb: [*c]const SurfaceNoiseBeta, arg_dest: [*c]SeaLevelColumnNoiseBeta, arg_cx: f64, arg_cz: f64, arg_lacmin: f64) void {
     var snb = arg_snb;
     _ = &snb;
     var dest = arg_dest;
@@ -9975,7 +9975,7 @@ pub fn genColumnNoise(arg_snb: [*c]const SurfaceNoiseBeta, arg_dest: [*c]SeaLeve
     sampleOctaveBeta17Terrain(&snb.*.octmax, @as([*c]f64, @ptrCast(@alignCast(&dest.*.maxSample))), cx, cz, @as(c_int, 0), lacmin);
     sampleOctaveBeta17Terrain(&snb.*.octmain, @as([*c]f64, @ptrCast(@alignCast(&dest.*.mainSample))), cx, cz, @as(c_int, 1), lacmin);
 }
-pub fn processColumnNoise(arg_out: [*c]f64, arg_src: [*c]const SeaLevelColumnNoiseBeta, climate: [*c]const f64) callconv(.C) void {
+pub fn processColumnNoise(arg_out: [*c]f64, arg_src: [*c]const SeaLevelColumnNoiseBeta, climate: [*c]const f64) void {
     var out = arg_out;
     _ = &out;
     var src = arg_src;
@@ -10045,7 +10045,7 @@ pub fn processColumnNoise(arg_out: [*c]f64, arg_src: [*c]const SeaLevelColumnNoi
         }
     }
 }
-pub fn lerp4(a: [*c]const f64, b: [*c]const f64, c: [*c]const f64, d: [*c]const f64, arg_dy: f64, arg_dx: f64, arg_dz: f64) callconv(.C) f64 {
+pub fn lerp4(a: [*c]const f64, b: [*c]const f64, c: [*c]const f64, d: [*c]const f64, arg_dy: f64, arg_dx: f64, arg_dz: f64) f64 {
     _ = &a;
     _ = &b;
     _ = &c;
@@ -10157,7 +10157,7 @@ pub export fn applySeed(arg_g: [*c]Generator, arg_dim: c_int, arg_seed: u64) voi
         }
     }
 }
-pub fn getMinCacheSize(arg_g: [*c]const Generator, arg_scale: c_int, arg_sx: c_int, arg_sy: c_int, arg_sz: c_int) callconv(.C) usize {
+pub fn getMinCacheSize(arg_g: [*c]const Generator, arg_scale: c_int, arg_sx: c_int, arg_sy: c_int, arg_sz: c_int) usize {
     var g = arg_g;
     _ = &g;
     var scale = arg_scale;
@@ -10318,7 +10318,7 @@ pub export fn getBiomeAt(arg_g: [*c]const Generator, arg_scale: c_int, arg_x: c_
     free(@as(?*anyopaque, @ptrCast(ids)));
     return id;
 }
-pub fn getLayerForScale(arg_g: [*c]const Generator, arg_scale: c_int) callconv(.C) [*c]const Layer {
+pub fn getLayerForScale(arg_g: [*c]const Generator, arg_scale: c_int) [*c]const Layer {
     var g = arg_g;
     _ = &g;
     var scale = arg_scale;
@@ -10338,7 +10338,7 @@ pub fn getLayerForScale(arg_g: [*c]const Generator, arg_scale: c_int) callconv(.
     }
     return null;
 }
-pub fn setupLayerStack(arg_g: [*c]LayerStack, arg_mc: c_int, arg_largeBiomes: c_int) callconv(.C) void {
+pub fn setupLayerStack(arg_g: [*c]LayerStack, arg_mc: c_int, arg_largeBiomes: c_int) void {
     var g = arg_g;
     _ = &g;
     var mc = arg_mc;
@@ -10530,7 +10530,7 @@ pub fn setupLayerStack(arg_g: [*c]LayerStack, arg_mc: c_int, arg_largeBiomes: c_
     }
     setupScale(g.*.entry_1, @as(c_int, 1));
 }
-pub fn getMinLayerCacheSize(arg_layer: [*c]const Layer, arg_sizeX: c_int, arg_sizeZ: c_int) callconv(.C) usize {
+pub fn getMinLayerCacheSize(arg_layer: [*c]const Layer, arg_sizeX: c_int, arg_sizeZ: c_int) usize {
     var layer = arg_layer;
     _ = &layer;
     var sizeX = arg_sizeX;
@@ -10546,7 +10546,7 @@ pub fn getMinLayerCacheSize(arg_layer: [*c]const Layer, arg_sizeX: c_int, arg_si
     getMaxArea(layer, sizeX, sizeZ, &maxX, &maxZ, &bufsiz);
     return bufsiz +% (@as(usize, @bitCast(@as(c_long, maxX))) *% @as(usize, @bitCast(@as(c_long, maxZ))));
 }
-pub fn setupLayer(arg_l: [*c]Layer, arg_map: ?*const mapfunc_t, arg_mc: c_int, arg_zoom: i8, arg_edge: i8, arg_saltbase: u64, arg_p: [*c]Layer, arg_p2: [*c]Layer) callconv(.C) [*c]Layer {
+pub fn setupLayer(arg_l: [*c]Layer, arg_map: ?*const mapfunc_t, arg_mc: c_int, arg_zoom: i8, arg_edge: i8, arg_saltbase: u64, arg_p: [*c]Layer, arg_p2: [*c]Layer) [*c]Layer {
     var l = arg_l;
     _ = &l;
     var map = arg_map;
@@ -10581,7 +10581,7 @@ pub fn setupLayer(arg_l: [*c]Layer, arg_map: ?*const mapfunc_t, arg_mc: c_int, a
     l.*.p2 = p2;
     return l;
 }
-pub fn genArea(arg_layer: [*c]const Layer, arg_out: [*c]c_int, arg_areaX: c_int, arg_areaZ: c_int, arg_areaWidth: c_int, arg_areaHeight: c_int) callconv(.C) c_int {
+pub fn genArea(arg_layer: [*c]const Layer, arg_out: [*c]c_int, arg_areaX: c_int, arg_areaZ: c_int, arg_areaWidth: c_int, arg_areaHeight: c_int) c_int {
     var layer = arg_layer;
     _ = &layer;
     var out = arg_out;
@@ -10900,7 +10900,7 @@ pub export fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]con
     free(@as(?*anyopaque, @ptrCast(depth)));
     return 0;
 }
-pub fn mapOceanMixMod(arg_l: [*c]const Layer, arg_out: [*c]c_int, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int) callconv(.C) c_int {
+pub fn mapOceanMixMod(arg_l: [*c]const Layer, arg_out: [*c]c_int, arg_x: c_int, arg_z: c_int, arg_w: c_int, arg_h: c_int) c_int {
     var l = arg_l;
     _ = &l;
     var out = arg_out;
@@ -10977,7 +10977,7 @@ pub fn mapOceanMixMod(arg_l: [*c]const Layer, arg_out: [*c]c_int, arg_x: c_int, 
     free(@as(?*anyopaque, @ptrCast(otyp)));
     return 0;
 }
-pub fn setupScale(arg_l: [*c]Layer, arg_scale: c_int) callconv(.C) void {
+pub fn setupScale(arg_l: [*c]Layer, arg_scale: c_int) void {
     var l = arg_l;
     _ = &l;
     var scale = arg_scale;
@@ -10990,7 +10990,7 @@ pub fn setupScale(arg_l: [*c]Layer, arg_scale: c_int) callconv(.C) void {
         setupScale(l.*.p2, scale * @as(c_int, @bitCast(@as(c_int, l.*.zoom))));
     }
 }
-pub fn getMaxArea(arg_layer: [*c]const Layer, arg_areaX: c_int, arg_areaZ: c_int, arg_maxX: [*c]c_int, arg_maxZ: [*c]c_int, arg_siz: [*c]usize) callconv(.C) void {
+pub fn getMaxArea(arg_layer: [*c]const Layer, arg_areaX: c_int, arg_areaZ: c_int, arg_maxX: [*c]c_int, arg_maxZ: [*c]c_int, arg_siz: [*c]usize) void {
     var layer = arg_layer;
     _ = &layer;
     var areaX = arg_areaX;
@@ -11828,7 +11828,7 @@ pub export fn getStructurePos(arg_structureType: c_int, arg_mc: c_int, arg_seed:
     }
     return 0;
 }
-pub fn getFeaturePos(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int) callconv(.C) Pos {
+pub fn getFeaturePos(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int) Pos {
     var config = arg_config;
     _ = &config;
     var seed = arg_seed;
@@ -11843,7 +11843,7 @@ pub fn getFeaturePos(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int
     pos.z = @as(c_int, @bitCast(@as(c_uint, @truncate(((@as(u64, @bitCast(@as(c_long, regZ))) *% @as(u64, @bitCast(@as(c_long, config.regionSize)))) +% @as(u64, @bitCast(@as(c_long, pos.z)))) << @intCast(4)))));
     return pos;
 }
-pub fn getFeatureChunkInRegion(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int) callconv(.C) Pos {
+pub fn getFeatureChunkInRegion(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int) Pos {
     var config = arg_config;
     _ = &config;
     var seed = arg_seed;
@@ -11876,7 +11876,7 @@ pub fn getFeatureChunkInRegion(arg_config: StructureConfig, arg_seed: u64, arg_r
     }
     return pos;
 }
-pub fn getLargeStructurePos(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int) callconv(.C) Pos {
+pub fn getLargeStructurePos(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int) Pos {
     var config = arg_config;
     _ = &config;
     var seed = arg_seed;
@@ -11891,7 +11891,7 @@ pub fn getLargeStructurePos(arg_config: StructureConfig, arg_seed: u64, arg_regX
     pos.z = @as(c_int, @bitCast(@as(c_uint, @truncate(((@as(u64, @bitCast(@as(c_long, regZ))) *% @as(u64, @bitCast(@as(c_long, config.regionSize)))) +% @as(u64, @bitCast(@as(c_long, pos.z)))) << @intCast(4)))));
     return pos;
 }
-pub fn getLargeStructureChunkInRegion(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int) callconv(.C) Pos {
+pub fn getLargeStructureChunkInRegion(arg_config: StructureConfig, arg_seed: u64, arg_regX: c_int, arg_regZ: c_int) Pos {
     var config = arg_config;
     _ = &config;
     var seed = arg_seed;
@@ -11922,7 +11922,7 @@ pub fn getLargeStructureChunkInRegion(arg_config: StructureConfig, arg_seed: u64
     pos.z >>= @intCast(@as(c_int, 1));
     return pos;
 }
-pub fn getMineshafts(arg_mc: c_int, arg_seed: u64, arg_cx0: c_int, arg_cz0: c_int, arg_cx1: c_int, arg_cz1: c_int, arg_out: [*c]Pos, arg_nout: c_int) callconv(.C) c_int {
+pub fn getMineshafts(arg_mc: c_int, arg_seed: u64, arg_cx0: c_int, arg_cz0: c_int, arg_cx1: c_int, arg_cz1: c_int, arg_out: [*c]Pos, arg_nout: c_int) c_int {
     var mc = arg_mc;
     _ = &mc;
     var seed = arg_seed;
@@ -12011,7 +12011,7 @@ pub fn getMineshafts(arg_mc: c_int, arg_seed: u64, arg_cx0: c_int, arg_cz0: c_in
     return n;
 }
 
-pub fn estimateSpawn(arg_g: [*c]const Generator, arg_rng: [*c]u64) callconv(.C) Pos {
+pub fn estimateSpawn(arg_g: [*c]const Generator, arg_rng: [*c]u64) Pos {
     var g = arg_g;
     _ = &g;
     var rng = arg_rng;
@@ -12205,7 +12205,7 @@ pub export fn getSpawn(arg_g: [*c]const Generator) Pos {
     }
     return spawn;
 }
-pub fn locateBiome(arg_g: [*c]const Generator, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_radius: c_int, arg_validB: u64, arg_validM: u64, arg_rng: [*c]u64, arg_passes: [*c]c_int) callconv(.C) Pos {
+pub fn locateBiome(arg_g: [*c]const Generator, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_radius: c_int, arg_validB: u64, arg_validM: u64, arg_rng: [*c]u64, arg_passes: [*c]c_int) Pos {
     var g = arg_g;
     _ = &g;
     var x = arg_x;
@@ -12459,7 +12459,7 @@ pub export fn isViableStructurePos(arg_structureType: c_int, arg_g: [*c]Generato
         else => return 0,
     }
 }
-pub fn isViableFeatureBiome(arg_mc: c_int, arg_structureType: c_int, arg_biomeID: c_int) callconv(.C) c_int {
+pub fn isViableFeatureBiome(arg_mc: c_int, arg_structureType: c_int, arg_biomeID: c_int) c_int {
     var mc = arg_mc;
     _ = &mc;
     var structureType = arg_structureType;
@@ -12648,7 +12648,7 @@ pub export fn isViableStructureTerrain(arg_structType: c_int, arg_g: [*c]Generat
     g.*.unnamed_0.unnamed_1.bn.nptype = nptype;
     return ret;
 }
-pub fn chunkGenerateRnd(arg_worldSeed: u64, arg_chunkX: c_int, arg_chunkZ: c_int) callconv(.C) u64 {
+pub fn chunkGenerateRnd(arg_worldSeed: u64, arg_chunkX: c_int, arg_chunkZ: c_int) u64 {
     var worldSeed = arg_worldSeed;
     _ = &worldSeed;
     var chunkX = arg_chunkX;
@@ -12663,7 +12663,7 @@ pub fn chunkGenerateRnd(arg_worldSeed: u64, arg_chunkX: c_int, arg_chunkZ: c_int
     return rnd;
 }
 
-pub fn getVariant(arg_r: ?*StructureVariant, arg_structType: c_int, arg_mc: c_int, arg_seed: u64, arg_x: c_int, arg_z: c_int, arg_biomeID: c_int) callconv(.C) c_int {
+pub fn getVariant(arg_r: ?*StructureVariant, arg_structType: c_int, arg_mc: c_int, arg_seed: u64, arg_x: c_int, arg_z: c_int, arg_biomeID: c_int) c_int {
     const r = arg_r orelse return 0;
     const structType = arg_structType;
     const mc = arg_mc;
@@ -13338,7 +13338,7 @@ pub fn getVariant(arg_r: ?*StructureVariant, arg_structType: c_int, arg_mc: c_in
 
 
 
-pub fn setAttemptSeed(arg_s: [*c]u64, arg_cx: c_int, arg_cz: c_int) callconv(.C) void {
+pub fn setAttemptSeed(arg_s: [*c]u64, arg_cx: c_int, arg_cz: c_int) void {
     var s = arg_s;
     _ = &s;
     var cx = arg_cx;
@@ -13349,7 +13349,7 @@ pub fn setAttemptSeed(arg_s: [*c]u64, arg_cx: c_int, arg_cz: c_int) callconv(.C)
     setSeed(s, s.*);
     _ = next(s, @as(c_int, 31));
 }
-pub fn getPopulationSeed(arg_mc: c_int, arg_ws: u64, arg_x: c_int, arg_z: c_int) callconv(.C) u64 {
+pub fn getPopulationSeed(arg_mc: c_int, arg_ws: u64, arg_x: c_int, arg_z: c_int) u64 {
     var mc = arg_mc;
     _ = &mc;
     var ws = arg_ws;
@@ -13384,7 +13384,7 @@ pub fn getPopulationSeed(arg_mc: c_int, arg_ws: u64, arg_x: c_int, arg_z: c_int)
     }
     return ((@as(u64, @bitCast(@as(c_long, x))) *% a) +% (@as(u64, @bitCast(@as(c_long, z))) *% b)) ^ ws;
 }
-pub fn getRegPos(arg_p: [*c]Pos, arg_s: [*c]u64, arg_rx: c_int, arg_rz: c_int, arg_sc: StructureConfig) callconv(.C) void {
+pub fn getRegPos(arg_p: [*c]Pos, arg_s: [*c]u64, arg_rx: c_int, arg_rz: c_int, arg_sc: StructureConfig) void {
     var p = arg_p;
     _ = &p;
     var s = arg_s;
@@ -13399,7 +13399,7 @@ pub fn getRegPos(arg_p: [*c]Pos, arg_s: [*c]u64, arg_rx: c_int, arg_rz: c_int, a
     p.*.x = @as(c_int, @bitCast(@as(c_uint, @truncate(((@as(u64, @bitCast(@as(c_long, rx))) *% @as(u64, @bitCast(@as(c_long, sc.regionSize)))) +% @as(u64, @bitCast(@as(c_long, nextInt(s, @as(c_int, @bitCast(@as(c_int, sc.chunkRange)))))))) << @intCast(4)))));
     p.*.z = @as(c_int, @bitCast(@as(c_uint, @truncate(((@as(u64, @bitCast(@as(c_long, rz))) *% @as(u64, @bitCast(@as(c_long, sc.regionSize)))) +% @as(u64, @bitCast(@as(c_long, nextInt(s, @as(c_int, @bitCast(@as(c_int, sc.chunkRange)))))))) << @intCast(4)))));
 }
-pub fn id_matches(arg_id: c_int, arg_b: u64, arg_m: u64) callconv(.C) c_int {
+pub fn id_matches(arg_id: c_int, arg_b: u64, arg_m: u64) c_int {
     var id = arg_id;
     _ = &id;
     var b = arg_b;
@@ -13408,7 +13408,7 @@ pub fn id_matches(arg_id: c_int, arg_b: u64, arg_m: u64) callconv(.C) c_int {
     _ = &m;
     return if (id < @as(c_int, 128)) @intFromBool(!!((@as(c_ulonglong, @bitCast(@as(c_ulonglong, b))) & (@as(c_ulonglong, 1) << @intCast(id))) != 0)) else @intFromBool(!!((@as(c_ulonglong, @bitCast(@as(c_ulonglong, m))) & (@as(c_ulonglong, 1) << @intCast(id - @as(c_int, 128)))) != 0));
 }
-pub fn areBiomesViable(arg_g: [*c]const Generator, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_rad: c_int, arg_validB: u64, arg_validM: u64, arg_approx: c_int) callconv(.C) c_int {
+pub fn areBiomesViable(arg_g: [*c]const Generator, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_rad: c_int, arg_validB: u64, arg_validM: u64, arg_approx: c_int) c_int {
     const g = arg_g;
     const x = arg_x;
     var y = arg_y;
@@ -13472,7 +13472,7 @@ pub fn areBiomesViable(arg_g: [*c]const Generator, arg_x: c_int, arg_y: c_int, a
     }
     return 1;
 }
-pub fn calcFitness(arg_g: [*c]const Generator, arg_x: c_int, arg_z: c_int) callconv(.C) u64 {
+pub fn calcFitness(arg_g: [*c]const Generator, arg_x: c_int, arg_z: c_int) u64 {
     var g = arg_g;
     _ = &g;
     var x = arg_x;
@@ -13558,7 +13558,7 @@ pub fn calcFitness(arg_g: [*c]const Generator, arg_x: c_int, arg_z: c_int) callc
     }
     return q;
 }
-pub fn findFittest(arg_g: [*c]const Generator, arg_pos: [*c]Pos, arg_fitness: [*c]u64, arg_maxrad: f64, arg_step: f64) callconv(.C) void {
+pub fn findFittest(arg_g: [*c]const Generator, arg_pos: [*c]Pos, arg_fitness: [*c]u64, arg_maxrad: f64, arg_step: f64) void {
     var g = arg_g;
     _ = &g;
     var pos = arg_pos;
@@ -13597,7 +13597,7 @@ pub fn findFittest(arg_g: [*c]const Generator, arg_pos: [*c]Pos, arg_fitness: [*
         }
     }
 }
-pub fn findFittestPos(arg_g: [*c]const Generator) callconv(.C) Pos {
+pub fn findFittestPos(arg_g: [*c]const Generator) Pos {
     var g = arg_g;
     _ = &g;
     var spawn: Pos = Pos{
@@ -14912,7 +14912,7 @@ pub const g_biome_para_range_21wd_diff: [2][13]c_int = [2][13]c_int{
         0,
     },
 };
-pub fn struct2str(arg_stype: c_int) callconv(.C) [*c]const u8 {
+pub fn struct2str(arg_stype: c_int) [*c]const u8 {
     var stype = arg_stype;
     _ = &stype;
     while (true) {
@@ -15102,14 +15102,14 @@ pub inline fn mNextFloat(mt: [*c]MersenneTwister) f32 {
 pub const REGION_SALT_X: u64 = 341873128712;
 pub const REGION_SALT_Z: u64 = 132897987541;
 pub const CHUNK_OFFSET: c_int = 8;
-pub fn mix_seed(seed: u64, regX: c_int, regZ: c_int, salt: u64) callconv(.C) u64 {
+pub fn mix_seed(seed: u64, regX: c_int, regZ: c_int, salt: u64) u64 {
     _ = &seed;
     _ = &regX;
     _ = &regZ;
     _ = &salt;
     return (((@as(u64, @bitCast(@as(c_long, regX))) *% REGION_SALT_X) +% (@as(u64, @bitCast(@as(c_long, regZ))) *% REGION_SALT_Z)) +% seed) +% salt;
 }
-pub fn getBedrockFeatureChunkInRegion(config: [*c]const StructureConfig, seed: u64, regX: c_int, regZ: c_int) callconv(.C) Pos {
+pub fn getBedrockFeatureChunkInRegion(config: [*c]const StructureConfig, seed: u64, regX: c_int, regZ: c_int) Pos {
     _ = &config;
     _ = &seed;
     _ = &regX;
@@ -15128,7 +15128,7 @@ pub fn getBedrockFeatureChunkInRegion(config: [*c]const StructureConfig, seed: u
     _ = &pos;
     return pos;
 }
-pub fn getBedrockFeaturePos(config: [*c]const StructureConfig, seed: u64, regX: c_int, regZ: c_int) callconv(.C) Pos {
+pub fn getBedrockFeaturePos(config: [*c]const StructureConfig, seed: u64, regX: c_int, regZ: c_int) Pos {
     _ = &config;
     _ = &seed;
     _ = &regX;
@@ -15145,7 +15145,7 @@ pub fn getBedrockFeaturePos(config: [*c]const StructureConfig, seed: u64, regX: 
     pos.z = @as(c_int, @bitCast(@as(c_uint, @truncate(((zBase +% @as(u64, @bitCast(@as(c_long, pos.z)))) << @intCast(4)) +% @as(u64, @bitCast(@as(c_long, CHUNK_OFFSET)))))));
     return pos;
 }
-pub fn getBedrockLargeStructureChunkInRegion(config: [*c]const StructureConfig, seed: u64, regX: c_int, regZ: c_int) callconv(.C) Pos {
+pub fn getBedrockLargeStructureChunkInRegion(config: [*c]const StructureConfig, seed: u64, regX: c_int, regZ: c_int) Pos {
     _ = &config;
     _ = &seed;
     _ = &regX;
@@ -15172,7 +15172,7 @@ pub fn getBedrockLargeStructureChunkInRegion(config: [*c]const StructureConfig, 
     _ = &pos;
     return pos;
 }
-pub fn getBedrockLargeStructurePos(config: [*c]const StructureConfig, seed: u64, regX: c_int, regZ: c_int) callconv(.C) Pos {
+pub fn getBedrockLargeStructurePos(config: [*c]const StructureConfig, seed: u64, regX: c_int, regZ: c_int) Pos {
     _ = &config;
     _ = &seed;
     _ = &regX;
@@ -15189,7 +15189,7 @@ pub fn getBedrockLargeStructurePos(config: [*c]const StructureConfig, seed: u64,
     pos.z = @as(c_int, @bitCast(@as(c_uint, @truncate(((zBase +% @as(u64, @bitCast(@as(c_long, pos.z)))) << @intCast(4)) +% @as(u64, @bitCast(@as(c_long, CHUNK_OFFSET)))))));
     return pos;
 }
-pub fn bedrockChunkGenerateRnd(worldseed: u64, chunkX: c_int, chunkZ: c_int, n: c_int, mt: [*c]MersenneTwister) callconv(.C) void {
+pub fn bedrockChunkGenerateRnd(worldseed: u64, chunkX: c_int, chunkZ: c_int, n: c_int, mt: [*c]MersenneTwister) void {
     _ = &worldseed;
     _ = &chunkX;
     _ = &chunkZ;
