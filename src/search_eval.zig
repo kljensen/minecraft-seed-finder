@@ -917,6 +917,23 @@ fn selectBiomeMatchStride(min_count: i32) i32 {
     return 1;
 }
 
+fn minBiomeMatchStride(reqs: []const *const BiomeReq) i32 {
+    var min_stride: i32 = 4;
+    for (reqs) |req| {
+        const stride = selectBiomeMatchStride(req.min_count);
+        if (stride < min_stride) min_stride = stride;
+    }
+    return min_stride;
+}
+
+fn selectOffsetsForStride(req: *const BiomeReq, stride: i32) []const BiomeOffset {
+    return switch (stride) {
+        4 => if (req.coarse_offsets_4.len > 0) req.coarse_offsets_4 else req.offsets,
+        2 => if (req.coarse_offsets_2.len > 0) req.coarse_offsets_2 else req.offsets,
+        else => req.offsets,
+    };
+}
+
 pub fn buildBiomePointsForAnchor(allocator: std.mem.Allocator, center: c.Pos, offsets: []const BiomeOffset) ![]BiomePoint {
     var out = try allocator.alloc(BiomePoint, offsets.len);
     for (offsets, 0..) |off, i| {
@@ -1297,20 +1314,9 @@ fn combinedBiomeThreshold(
     const use_points = max_req.points.len > 0;
     const use_fast = canUseFastBiomePath(g);
 
-    // Determine iteration list size
-    const total_points = if (use_points) max_req.points.len else blk: {
-        var min_stride: i32 = 4;
-        for (0..n) |i| {
-            const s = selectBiomeMatchStride(biome_reqs[i].min_count);
-            if (s < min_stride) min_stride = s;
-        }
-        const offsets = switch (min_stride) {
-            4 => if (max_req.coarse_offsets_4.len > 0) max_req.coarse_offsets_4 else max_req.offsets,
-            2 => if (max_req.coarse_offsets_2.len > 0) max_req.coarse_offsets_2 else max_req.offsets,
-            else => max_req.offsets,
-        };
-        break :blk offsets.len;
-    };
+    const min_stride = minBiomeMatchStride(biome_reqs[0..n]);
+    const iter_offsets = selectOffsetsForStride(max_req, min_stride);
+    const total_points = if (use_points) max_req.points.len else iter_offsets.len;
 
     if (total_points > MAX_BIOME_CACHE_POINTS or total_points == 0) return null;
     if (!use_fast) return null; // cache only helps with fast path (climate early-exit)
@@ -1321,18 +1327,6 @@ fn combinedBiomeThreshold(
     // infeasible) is intentionally left uncached so later biome phases can
     // resample with their own climate bounds.
     var biome_cache = [_]?i32{null} ** MAX_BIOME_CACHE_POINTS;
-
-    // Get iteration list for offsets path
-    var min_stride: i32 = 4;
-    for (0..n) |i| {
-        const s = selectBiomeMatchStride(biome_reqs[i].min_count);
-        if (s < min_stride) min_stride = s;
-    }
-    const iter_offsets = if (!use_points) switch (min_stride) {
-        4 => if (max_req.coarse_offsets_4.len > 0) max_req.coarse_offsets_4 else max_req.offsets,
-        2 => if (max_req.coarse_offsets_2.len > 0) max_req.coarse_offsets_2 else max_req.offsets,
-        else => max_req.offsets,
-    } else max_req.offsets; // unused in points path
 
     // Sequential evaluation with caching: preserves short-circuit
     var all_matched = true;
