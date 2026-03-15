@@ -240,6 +240,12 @@ fn maybeFastBiomeId(g: *c.Generator, x: i32, z: i32, climate_bounds: ?BiomeClima
     return fastBiomeIdWithFeasibility(g, x, z, bounds);
 }
 
+inline fn fastBiomeSamplingEligible(g: *const c.Generator, climate_bounds: ?BiomeClimateBounds) bool {
+    if (!canUseFastBiomePath(g)) return false;
+    const bounds = climate_bounds orelse return false;
+    return bounds.valid;
+}
+
 /// Sample all 6 climate noise parameters at a biome-scale coordinate.
 /// Returns [T, H, C, E, depth, W] as raw floats (not scaled by 10000).
 /// Only valid for MC >= 1.18, DIM_OVERWORLD; returns null otherwise.
@@ -933,7 +939,7 @@ pub fn buildBiomePointsForAnchor(allocator: std.mem.Allocator, center: c.Pos, of
 fn scanBiomeWithinRadiusWithBounds(g: *c.Generator, center: c.Pos, biome_id: i32, offsets: []const BiomeOffset, climate_bounds: ?BiomeClimateBounds) BiomeScanResult {
     var best: i64 = std.math.maxInt(i64);
     var count: i32 = 0;
-    const fast_enabled = maybeFastBiomeId(g, center.x, center.z, climate_bounds) != null;
+    const fast_enabled = fastBiomeSamplingEligible(g, climate_bounds);
     var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
     var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
@@ -974,7 +980,7 @@ pub fn scanBiomeWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, offs
 fn scanBiomePointsWithBounds(g: *c.Generator, biome_id: i32, points: []const BiomePoint, climate_bounds: ?BiomeClimateBounds) BiomeScanResult {
     var best: i64 = std.math.maxInt(i64);
     var count: i32 = 0;
-    const fast_enabled = points.len > 0 and maybeFastBiomeId(g, points[0].x, points[0].z, climate_bounds) != null;
+    const fast_enabled = points.len > 0 and fastBiomeSamplingEligible(g, climate_bounds);
     var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
     var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxPointRunWidth(points));
@@ -1013,7 +1019,7 @@ pub fn scanBiomePoints(g: *c.Generator, biome_id: i32, points: []const BiomePoin
 fn biomeMatchesWithinRadiusWithBounds(g: *c.Generator, center: c.Pos, biome_id: i32, min_count: i32, offsets: []const BiomeOffset, climate_bounds: ?BiomeClimateBounds) bool {
     if (min_count <= 0) return true;
     var count: i32 = 0;
-    const fast_enabled = maybeFastBiomeId(g, center.x, center.z, climate_bounds) != null;
+    const fast_enabled = fastBiomeSamplingEligible(g, climate_bounds);
     var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
     var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxOffsetRunWidth(center, offsets));
@@ -1056,7 +1062,7 @@ pub fn biomeMatchesWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i32, m
 fn biomeMatchesPointsWithBounds(g: *c.Generator, biome_id: i32, min_count: i32, points: []const BiomePoint, climate_bounds: ?BiomeClimateBounds) bool {
     if (min_count <= 0) return true;
     var count: i32 = 0;
-    const fast_enabled = points.len > 0 and maybeFastBiomeId(g, points[0].x, points[0].z, climate_bounds) != null;
+    const fast_enabled = points.len > 0 and fastBiomeSamplingEligible(g, climate_bounds);
     var sampler_opt: ?CachedBiomeSampler = if (fast_enabled) null else CachedBiomeSampler.init(g, 1, 0);
     defer if (sampler_opt) |*sampler| sampler.deinit();
     var row_sampler_opt: ?CachedBiomeRowSampler = if (fast_enabled) null else CachedBiomeRowSampler.init(g, 1, 0, maxPointRunWidth(points));
