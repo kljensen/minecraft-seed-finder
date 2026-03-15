@@ -6,37 +6,8 @@ const biome_tree = @import("biome_tree.zig");
 pub const __builtin_bswap32 = @import("std").zig.c_builtins.__builtin_bswap32;
 pub const __builtin_expect = @import("std").zig.c_builtins.__builtin_expect;
 pub const __builtin_unreachable = @import("std").zig.c_builtins.__builtin_unreachable;
-pub const __dev_t = c_ulong;
-pub const __uid_t = c_uint;
-pub const __gid_t = c_uint;
-pub const __ino_t = c_ulong;
-pub const __mode_t = c_uint;
-pub const __nlink_t = c_uint;
-pub const __off_t = c_long;
-pub const __off64_t = c_long;
-pub const __time_t = c_long;
-pub const __suseconds_t = c_long;
-pub const __blksize_t = c_int;
-pub const __blkcnt_t = c_long;
-pub const __syscall_slong_t = c_long;
-pub const struct_timeval = extern struct {
-    tv_sec: __time_t = @import("std").mem.zeroes(__time_t),
-    tv_usec: __suseconds_t = @import("std").mem.zeroes(__suseconds_t),
-};
-pub const struct_timespec = extern struct {
-    tv_sec: __time_t = @import("std").mem.zeroes(__time_t),
-    tv_nsec: __syscall_slong_t = @import("std").mem.zeroes(__syscall_slong_t),
-};
-pub const __fd_mask = c_long;
-pub const fd_set = extern struct {
-    __fds_bits: [16]__fd_mask = @import("std").mem.zeroes([16]__fd_mask),
-};
-// select: removed (unused extern)
-const struct_unnamed_1 = extern struct {
-    __low: c_uint = @import("std").mem.zeroes(c_uint),
-    __high: c_uint = @import("std").mem.zeroes(c_uint),
-};
-// random: removed (unused extern)
+
+
 pub const malloc = libc_shim.malloc;
 pub const calloc = libc_shim.calloc;
 pub const free = libc_shim.free;
@@ -368,7 +339,6 @@ pub const nan = libc_shim.nan;
 // round: removed (unused extern)
 pub inline fn sqrtf(__x: f32) f32 { return @sqrt(__x); }
 pub inline fn fabsf(__x: f32) f32 { return @abs(__x); }
-pub extern var signgam: c_int;
 pub const struct_PerlinNoise = extern struct {
     d: [257]u8 = @import("std").mem.zeroes([257]u8),
     h2: u8 = @import("std").mem.zeroes(u8),
@@ -1195,49 +1165,7 @@ pub export fn sampleDoublePerlin(arg_noise: [*c]const DoublePerlinNoise, arg_x: 
     v += sampleOctave(&noise.*.octB, x * f, y * f, z * f);
     return v * noise.*.amplitude;
 }
-const union_unnamed_4 = extern union {
-    __wch: c_uint,
-    __wchb: [4]u8,
-};
-pub const struct__IO_marker = opaque {};
-pub const _IO_lock_t = anyopaque;
-pub const struct__IO_codecvt = opaque {};
-pub const struct__IO_wide_data = opaque {};
-pub const struct__IO_FILE = extern struct {
-    _flags: c_int = @import("std").mem.zeroes(c_int),
-    _IO_read_ptr: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_read_end: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_read_base: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_write_base: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_write_ptr: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_write_end: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_buf_base: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_buf_end: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_save_base: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_backup_base: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _IO_save_end: [*c]u8 = @import("std").mem.zeroes([*c]u8),
-    _markers: ?*struct__IO_marker = @import("std").mem.zeroes(?*struct__IO_marker),
-    _chain: [*c]struct__IO_FILE = @import("std").mem.zeroes([*c]struct__IO_FILE),
-    _fileno: c_int = @import("std").mem.zeroes(c_int),
-    _flags2: c_int = @import("std").mem.zeroes(c_int),
-    _old_offset: __off_t = @import("std").mem.zeroes(__off_t),
-    _cur_column: c_ushort = @import("std").mem.zeroes(c_ushort),
-    _vtable_offset: i8 = @import("std").mem.zeroes(i8),
-    _shortbuf: [1]u8 = @import("std").mem.zeroes([1]u8),
-    _lock: ?*_IO_lock_t = @import("std").mem.zeroes(?*_IO_lock_t),
-    _offset: __off64_t = @import("std").mem.zeroes(__off64_t),
-    _codecvt: ?*struct__IO_codecvt = @import("std").mem.zeroes(?*struct__IO_codecvt),
-    _wide_data: ?*struct__IO_wide_data = @import("std").mem.zeroes(?*struct__IO_wide_data),
-    _freeres_list: [*c]struct__IO_FILE = @import("std").mem.zeroes([*c]struct__IO_FILE),
-    _freeres_buf: ?*anyopaque = @import("std").mem.zeroes(?*anyopaque),
-    __pad5: usize = @import("std").mem.zeroes(usize),
-    _mode: c_int = @import("std").mem.zeroes(c_int),
-    _unused2: [20]u8 = @import("std").mem.zeroes([20]u8),
-};
-pub const FILE = struct__IO_FILE;
-pub extern var stdin: [*c]FILE;
-pub extern var stdout: [*c]FILE;
-// stderr is imported via @cImport at the top of the file
+// stderr is defined at top of file as null (error logging disabled in pure Zig builds)
 pub const fprintf = libc_shim.fprintf;
 pub const printf = libc_shim.printf;
 pub fn indexedLerp(arg_idx: u8, arg_a: f64, arg_b: f64, arg_c: f64) callconv(.C) f64 {
@@ -1834,147 +1762,118 @@ pub fn mapContinent(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:62:5
 pub fn mapZoomFuzzy(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:85:5
 pub fn mapZoom(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:189:5
 pub fn mapLand(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:268:5
 pub fn mapLand16(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:384:5
 pub fn mapLandB18(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:479:5
 pub fn mapIsland(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:532:5
 pub fn mapSnow(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:605:5
 pub fn mapSnow16(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:573:5
 pub fn mapCool(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:641:5
 pub fn mapHeat(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:680:5
 pub fn mapSpecial(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:719:5
 pub fn mapMushroom(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:753:5
 pub fn mapDeepOcean(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], deep_ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:792:5
 pub fn mapBiome(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:861:5
 pub fn mapBamboo(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:972:5
 pub fn mapNoise(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:940:5
 pub fn mapBiomeEdge(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1015:5
 pub fn mapHills(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1086:5
 pub fn mapRiver(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], river);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1255:5
 pub fn mapSmooth(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1312:5
 pub fn mapSunflower(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1366:5
 pub fn mapShore(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], beach);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1423:5
 pub fn mapSwampRiver(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], swamp);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1535:5
 pub fn mapRiverMix(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1565:5
 pub fn mapOceanTemp(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1608:5
 pub fn mapOceanMix(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], ocean);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1636:5
 pub fn mapVoronoi(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1909:5
 pub fn mapVoronoi114(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) callconv(.C) c_int {
     @memset(out[0..@as(usize, @intCast(w * h))], plains);
     return 0;
 }
-// /tmp/seed-finder-csrc/lib/cubiomes/layers.c:1933:5
 pub fn getVoronoiSHA(arg_seed: u64) callconv(.C) u64 {
     var seed = arg_seed;
     _ = &seed;
@@ -13716,10 +13615,6 @@ pub fn findFittestPos(arg_g: [*c]const Generator) callconv(.C) Pos {
 }
 pub const g_spawn_biomes_17: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate(((((((@as(c_ulonglong, 1) << @intCast(forest)) | (@as(c_ulonglong, 1) << @intCast(plains))) | (@as(c_ulonglong, 1) << @intCast(taiga))) | (@as(c_ulonglong, 1) << @intCast(taiga_hills))) | (@as(c_ulonglong, 1) << @intCast(wooded_hills))) | (@as(c_ulonglong, 1) << @intCast(jungle))) | (@as(c_ulonglong, 1) << @intCast(jungle_hills))))));
 pub const g_monument_biomes1: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate((((((((((((@as(c_ulonglong, 1) << @intCast(ocean)) | (@as(c_ulonglong, 1) << @intCast(deep_ocean))) | (@as(c_ulonglong, 1) << @intCast(river))) | (@as(c_ulonglong, 1) << @intCast(frozen_river))) | (@as(c_ulonglong, 1) << @intCast(frozen_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_frozen_ocean))) | (@as(c_ulonglong, 1) << @intCast(cold_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_cold_ocean))) | (@as(c_ulonglong, 1) << @intCast(lukewarm_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_lukewarm_ocean))) | (@as(c_ulonglong, 1) << @intCast(warm_ocean))) | (@as(c_ulonglong, 1) << @intCast(deep_warm_ocean))))));
-// /tmp/seed-finder-csrc/lib/cubiomes/finders.c:2434:5
-// /tmp/seed-finder-csrc/lib/cubiomes/finders.c:2479:5
-// /tmp/seed-finder-csrc/lib/cubiomes/finders.c:2519:5
-// /tmp/seed-finder-csrc/lib/cubiomes/finders.c:2546:5
 const struct_unnamed_27 = extern struct {
     offset: Pos3 = @import("std").mem.zeroes(Pos3),
     size: Pos3 = @import("std").mem.zeroes(Pos3),
@@ -15108,37 +15003,9 @@ pub const low20QuadHutBarely: [29]u64 = [29]u64{
     @as(u64, @bitCast(@as(c_long, @as(c_int, 1004042)))),
     0,
 };
-pub const struct_linked_seeds_t = extern struct {
-    seeds: [100]u64 = @import("std").mem.zeroes([100]u64),
-    len: usize = @import("std").mem.zeroes(usize),
-    next: [*c]linked_seeds_t = @import("std").mem.zeroes([*c]linked_seeds_t),
-};
-pub const linked_seeds_t = struct_linked_seeds_t;
 
-pub const struct_stat = extern struct {
-    st_dev: __dev_t = @import("std").mem.zeroes(__dev_t),
-    st_ino: __ino_t = @import("std").mem.zeroes(__ino_t),
-    st_mode: __mode_t = @import("std").mem.zeroes(__mode_t),
-    st_nlink: __nlink_t = @import("std").mem.zeroes(__nlink_t),
-    st_uid: __uid_t = @import("std").mem.zeroes(__uid_t),
-    st_gid: __gid_t = @import("std").mem.zeroes(__gid_t),
-    st_rdev: __dev_t = @import("std").mem.zeroes(__dev_t),
-    __pad1: __dev_t = @import("std").mem.zeroes(__dev_t),
-    st_size: __off_t = @import("std").mem.zeroes(__off_t),
-    st_blksize: __blksize_t = @import("std").mem.zeroes(__blksize_t),
-    __pad2: c_int = @import("std").mem.zeroes(c_int),
-    st_blocks: __blkcnt_t = @import("std").mem.zeroes(__blkcnt_t),
-    st_atim: struct_timespec = @import("std").mem.zeroes(struct_timespec),
-    st_mtim: struct_timespec = @import("std").mem.zeroes(struct_timespec),
-    st_ctim: struct_timespec = @import("std").mem.zeroes(struct_timespec),
-    __glibc_reserved: [2]c_int = @import("std").mem.zeroes([2]c_int),
-};
-pub extern var __tzname: [2][*c]u8;
-pub extern var __daylight: c_int;
-pub extern var __timezone: c_long;
-pub extern var tzname: [2][*c]u8;
-pub extern var daylight: c_int;
-pub extern var timezone: c_long;
+
+
 pub const MersenneTwister = extern struct {
     array: [624]u32 = @import("std").mem.zeroes([624]u32),
     index: uint_fast16_t = @import("std").mem.zeroes(uint_fast16_t),
@@ -15747,134 +15614,4 @@ pub export fn getBedrockStructurePos(arg_structureType: c_int, arg_mc: c_int, ar
 // (no file):222:9
 // (no file):230:9
 pub const linux = @as(c_int, 1);
-// /usr/include/features.h:186:9
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:45:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:55:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:79:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:80:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:81:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:82:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:124:9
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:125:9
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:209:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:210:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:218:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:249:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:256:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:258:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:261:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:283:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:294:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:300:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:310:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:317:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:323:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:332:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:333:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:341:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:351:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:364:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:374:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:386:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:399:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:408:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:426:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:435:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:453:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:454:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:497:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:546:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:622:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:623:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:637:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:638:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:683:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:684:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:685:11
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:695:10
-// /usr/include/aarch64-linux-gnu/sys/cdefs.h:702:10
-// /usr/include/aarch64-linux-gnu/bits/floatn.h:69:12
-// /usr/include/aarch64-linux-gnu/bits/floatn.h:85:12
-// /usr/include/aarch64-linux-gnu/bits/floatn.h:86:12
-// /usr/include/aarch64-linux-gnu/bits/floatn.h:87:12
-// /usr/include/aarch64-linux-gnu/bits/floatn.h:88:12
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:149:12
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:160:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:169:12
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:178:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:221:12
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:255:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:256:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:257:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:258:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:272:12
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:273:12
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:274:12
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:275:12
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:289:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:290:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:291:13
-// /usr/include/aarch64-linux-gnu/bits/floatn-common.h:292:13
-// /usr/include/aarch64-linux-gnu/bits/types.h:137:10
-// /usr/include/aarch64-linux-gnu/bits/typesizes.h:72:9
-// /usr/include/aarch64-linux-gnu/bits/select.h:25:9
-// /usr/include/aarch64-linux-gnu/bits/select.h:32:9
-// /usr/include/aarch64-linux-gnu/bits/select.h:34:9
-// /usr/include/aarch64-linux-gnu/bits/struct_mutex.h:77:10
-// /usr/include/aarch64-linux-gnu/bits/thread-shared-types.h:113:9
-// /usr/local/zig/lib/include/__stddef_offsetof.h:16:9
-// /tmp/seed-finder-csrc/lib/cubiomes/rng.h:27:9
-// /tmp/seed-finder-csrc/lib/cubiomes/rng.h:32:9
-// /tmp/seed-finder-csrc/lib/cubiomes/rng.h:35:9
-// /tmp/seed-finder-csrc/lib/cubiomes/rng.h:137:9
-// /usr/include/math.h:48:10
-// /usr/include/math.h:60:11
-// /usr/include/aarch64-linux-gnu/bits/flt-eval-method.h:38:11
-// /usr/include/math.h:276:9
-// /usr/include/math.h:288:9
-// /usr/include/math.h:293:9
-// /usr/include/math.h:296:9
-// /usr/include/math.h:305:9
-// /usr/include/math.h:550:9
-// /usr/include/math.h:551:9
-// /usr/include/math.h:552:9
-// /usr/include/math.h:553:9
-// /usr/include/math.h:555:9
-// /usr/include/math.h:922:10
-// /usr/include/math.h:967:11
-// /usr/include/math.h:994:11
-// /usr/include/math.h:1002:11
-// /usr/include/math.h:1305:11
-// /usr/include/math.h:1306:11
-// /usr/include/math.h:1307:11
-// /usr/include/math.h:1308:11
-// /usr/include/math.h:1309:11
-// /usr/include/math.h:1310:11
-// /usr/include/aarch64-linux-gnu/bits/types/struct_FILE.h:102:9
-// /usr/include/aarch64-linux-gnu/bits/types/struct_FILE.h:106:9
-// /usr/local/zig/lib/include/float.h:91:9
-// /usr/local/zig/lib/include/float.h:93:9
-// /tmp/seed-finder-csrc/lib/cubiomes/biomenoise.c:406:17
-// /tmp/seed-finder-csrc/lib/cubiomes/biomenoise.c:407:17
-// /usr/include/aarch64-linux-gnu/bits/struct_stat.h:68:10
-// /usr/include/aarch64-linux-gnu/bits/struct_stat.h:69:10
-// /usr/include/aarch64-linux-gnu/bits/struct_stat.h:70:10
-// /usr/include/aarch64-linux-gnu/bits/cpu-set.h:46:10
-// /usr/include/aarch64-linux-gnu/bits/cpu-set.h:58:9
-// /usr/include/aarch64-linux-gnu/bits/cpu-set.h:65:9
-// /usr/include/aarch64-linux-gnu/bits/cpu-set.h:72:9
-// /usr/include/aarch64-linux-gnu/bits/cpu-set.h:84:10
-// /usr/include/aarch64-linux-gnu/bits/cpu-set.h:99:9
-// /usr/include/sched.h:48:9
-// /usr/include/pthread.h:90:9
-// /usr/include/pthread.h:114:10
-// /usr/include/pthread.h:155:9
-// /usr/include/pthread.h:681:10
-// /usr/include/pthread.h:702:10
-pub const @"bool" = bool;
-pub const @"true" = @as(c_int, 1);
-pub const @"false" = @as(c_int, 0);
-// /tmp/seed-finder-csrc/lib/bedrockref/Brng.h:17:13
-// /tmp/seed-finder-csrc/lib/bedrockref/Brng.h:18:13
-// /tmp/seed-finder-csrc/lib/bedrockref/Brng.h:19:13
-// /tmp/seed-finder-csrc/lib/bedrockref/Brng.h:20:13
+
