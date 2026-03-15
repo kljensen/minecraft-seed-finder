@@ -1138,6 +1138,62 @@ pub fn bestBiomeDistanceWithinRadius(g: *c.Generator, center: c.Pos, biome_id: i
     return result.best_dist2;
 }
 
+const StructureRegionBounds = struct {
+    min_reg_x: i32,
+    max_reg_x: i32,
+    min_reg_z: i32,
+    max_reg_z: i32,
+};
+
+fn computeStructureRegionBounds(center: c.Pos, radius: i32, cfg: bedrock.StructureConfig) StructureRegionBounds {
+    const min_x = center.x - radius;
+    const max_x = center.x + radius;
+    const min_z = center.z - radius;
+    const max_z = center.z + radius;
+
+    const min_attempt_chunk_x = floorDiv(min_x - 8, 16);
+    const max_attempt_chunk_x = floorDiv(max_x - 8, 16);
+    const min_attempt_chunk_z = floorDiv(min_z - 8, 16);
+    const max_attempt_chunk_z = floorDiv(max_z - 8, 16);
+
+    return .{
+        .min_reg_x = floorDiv(min_attempt_chunk_x - (cfg.spacing - 1), cfg.spacing),
+        .max_reg_x = floorDiv(max_attempt_chunk_x, cfg.spacing),
+        .min_reg_z = floorDiv(min_attempt_chunk_z - (cfg.spacing - 1), cfg.spacing),
+        .max_reg_z = floorDiv(max_attempt_chunk_z, cfg.spacing),
+    };
+}
+
+fn evalStructureCandidateDistance2(
+    g: *c.Generator,
+    seed: u64,
+    mc: i32,
+    center: c.Pos,
+    req: StructureReq,
+    reg_x: i32,
+    reg_z: i32,
+    radius2: i64,
+    telemetry: ?*EvalTelemetry,
+) ?i64 {
+    if (telemetry) |t| t.structure_get_pos_calls +%= 1;
+    const pos = getStructurePosForReq(req, mc, seed, reg_x, reg_z) orelse return null;
+
+    const dx = pos.x - center.x;
+    const dz = pos.z - center.z;
+    const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
+    if (dist2 > radius2) return null;
+
+    if (telemetry) |t| t.structure_within_radius +%= 1;
+    if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
+    if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) return null;
+
+    if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
+    if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) return null;
+
+    if (telemetry) |t| t.structure_matches +%= 1;
+    return dist2;
+}
+
 pub fn bestStructureDistanceWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.Pos, req: StructureReq) ?i64 {
     const r2 = req.radius2;
     var best: i64 = std.math.maxInt(i64);
@@ -1146,55 +1202,24 @@ pub fn bestStructureDistanceWithinRadius(g: *c.Generator, seed: u64, mc: i32, ce
     if (req.regions.len != 0) {
         for (req.regions) |reg| {
             if (telemetry) |t| t.structure_region_candidates +%= 1;
-            if (telemetry) |t| t.structure_get_pos_calls +%= 1;
-            const pos = getStructurePosForReq(req, mc, seed, reg.reg_x, reg.reg_z) orelse continue;
-            const dx = pos.x - center.x;
-            const dz = pos.z - center.z;
-            const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
-            if (dist2 > r2) continue;
-            if (telemetry) |t| t.structure_within_radius +%= 1;
-            if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
-            if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) continue;
-            if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
-            if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) continue;
-            if (telemetry) |t| t.structure_matches +%= 1;
+            const dist2 = evalStructureCandidateDistance2(g, seed, mc, center, req, reg.reg_x, reg.reg_z, r2, telemetry) orelse continue;
             if (dist2 < best) best = dist2;
         }
     } else {
         const cfg = req.cfg orelse return null;
-        const min_x = center.x - req.radius;
-        const max_x = center.x + req.radius;
-        const min_z = center.z - req.radius;
-        const max_z = center.z + req.radius;
-        const min_attempt_chunk_x = floorDiv(min_x - 8, 16);
-        const max_attempt_chunk_x = floorDiv(max_x - 8, 16);
-        const min_attempt_chunk_z = floorDiv(min_z - 8, 16);
-        const max_attempt_chunk_z = floorDiv(max_z - 8, 16);
-        const min_reg_x = floorDiv(min_attempt_chunk_x - (cfg.spacing - 1), cfg.spacing);
-        const max_reg_x = floorDiv(max_attempt_chunk_x, cfg.spacing);
-        const min_reg_z = floorDiv(min_attempt_chunk_z - (cfg.spacing - 1), cfg.spacing);
-        const max_reg_z = floorDiv(max_attempt_chunk_z, cfg.spacing);
-        var reg_z = min_reg_z;
-        while (reg_z <= max_reg_z) : (reg_z += 1) {
-            var reg_x = min_reg_x;
-            while (reg_x <= max_reg_x) : (reg_x += 1) {
+        const bounds = computeStructureRegionBounds(center, req.radius, cfg);
+
+        var reg_z = bounds.min_reg_z;
+        while (reg_z <= bounds.max_reg_z) : (reg_z += 1) {
+            var reg_x = bounds.min_reg_x;
+            while (reg_x <= bounds.max_reg_x) : (reg_x += 1) {
                 if (telemetry) |t| t.structure_region_candidates +%= 1;
                 if (structure_bbox_prune_enabled and !regionMayIntersectRadius(center, cfg, reg_x, reg_z, r2)) {
                     if (telemetry) |t| t.structure_region_bbox_rejects +%= 1;
                     continue;
                 }
-                if (telemetry) |t| t.structure_get_pos_calls +%= 1;
-                const pos = getStructurePosForReq(req, mc, seed, reg_x, reg_z) orelse continue;
-                const dx = pos.x - center.x;
-                const dz = pos.z - center.z;
-                const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
-                if (dist2 > r2) continue;
-                if (telemetry) |t| t.structure_within_radius +%= 1;
-                if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
-                if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) continue;
-                if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
-                if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) continue;
-                if (telemetry) |t| t.structure_matches +%= 1;
+
+                const dist2 = evalStructureCandidateDistance2(g, seed, mc, center, req, reg_x, reg_z, r2, telemetry) orelse continue;
                 if (dist2 < best) best = dist2;
             }
         }
@@ -1211,62 +1236,24 @@ pub fn anyStructureWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.P
     if (req.regions.len != 0) {
         for (req.regions) |reg| {
             if (telemetry) |t| t.structure_region_candidates +%= 1;
-            if (telemetry) |t| t.structure_get_pos_calls +%= 1;
-            const pos = getStructurePosForReq(req, mc, seed, reg.reg_x, reg.reg_z) orelse continue;
-            const dx = pos.x - center.x;
-            const dz = pos.z - center.z;
-            const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
-            if (dist2 > r2) continue;
-            if (telemetry) |t| t.structure_within_radius +%= 1;
-            if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
-            if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) continue;
-            if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
-            if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) continue;
-            if (telemetry) |t| {
-                t.structure_matches +%= 1;
-            }
-            return true;
+            if (evalStructureCandidateDistance2(g, seed, mc, center, req, reg.reg_x, reg.reg_z, r2, telemetry) != null) return true;
         }
         return false;
     }
 
     const cfg = req.cfg orelse return false;
-    const min_x = center.x - req.radius;
-    const max_x = center.x + req.radius;
-    const min_z = center.z - req.radius;
-    const max_z = center.z + req.radius;
-    const min_attempt_chunk_x = floorDiv(min_x - 8, 16);
-    const max_attempt_chunk_x = floorDiv(max_x - 8, 16);
-    const min_attempt_chunk_z = floorDiv(min_z - 8, 16);
-    const max_attempt_chunk_z = floorDiv(max_z - 8, 16);
-    const min_reg_x = floorDiv(min_attempt_chunk_x - (cfg.spacing - 1), cfg.spacing);
-    const max_reg_x = floorDiv(max_attempt_chunk_x, cfg.spacing);
-    const min_reg_z = floorDiv(min_attempt_chunk_z - (cfg.spacing - 1), cfg.spacing);
-    const max_reg_z = floorDiv(max_attempt_chunk_z, cfg.spacing);
-    var reg_z = min_reg_z;
-    while (reg_z <= max_reg_z) : (reg_z += 1) {
-        var reg_x = min_reg_x;
-        while (reg_x <= max_reg_x) : (reg_x += 1) {
+    const bounds = computeStructureRegionBounds(center, req.radius, cfg);
+
+    var reg_z = bounds.min_reg_z;
+    while (reg_z <= bounds.max_reg_z) : (reg_z += 1) {
+        var reg_x = bounds.min_reg_x;
+        while (reg_x <= bounds.max_reg_x) : (reg_x += 1) {
             if (telemetry) |t| t.structure_region_candidates +%= 1;
             if (structure_bbox_prune_enabled and !regionMayIntersectRadius(center, cfg, reg_x, reg_z, r2)) {
                 if (telemetry) |t| t.structure_region_bbox_rejects +%= 1;
                 continue;
             }
-            if (telemetry) |t| t.structure_get_pos_calls +%= 1;
-            const pos = getStructurePosForReq(req, mc, seed, reg_x, reg_z) orelse continue;
-            const dx = pos.x - center.x;
-            const dz = pos.z - center.z;
-            const dist2 = @as(i64, dx) * dx + @as(i64, dz) * dz;
-            if (dist2 > r2) continue;
-            if (telemetry) |t| t.structure_within_radius +%= 1;
-            if (telemetry) |t| t.structure_viable_pos_checks +%= 1;
-            if (c.isViableStructurePos(req.structure_c, g, pos.x, pos.z, 0) == 0) continue;
-            if (telemetry) |t| t.structure_viable_terrain_checks +%= 1;
-            if (c.isViableStructureTerrain(req.structure_c, g, pos.x, pos.z) == 0) continue;
-            if (telemetry) |t| {
-                t.structure_matches +%= 1;
-            }
-            return true;
+            if (evalStructureCandidateDistance2(g, seed, mc, center, req, reg_x, reg_z, r2, telemetry) != null) return true;
         }
     }
     return false;
@@ -1504,7 +1491,12 @@ pub fn evalConstraintAt(
                         req.coarse_offsets_2.len < req.offsets.len)
                     {
                         const coarse_count = countBiomeMatchesWithBounds(
-                            g, anchor, req.biome_id, req.min_count, req.coarse_offsets_2, req.climate_bounds,
+                            g,
+                            anchor,
+                            req.biome_id,
+                            req.min_count,
+                            req.coarse_offsets_2,
+                            req.climate_bounds,
                         );
                         if (coarse_count >= req.min_count) break :blk true;
                         if (coarse_count == 0) break :blk false;
