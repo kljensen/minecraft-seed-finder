@@ -31,12 +31,12 @@ pub const __fd_mask = c_long;
 pub const fd_set = extern struct {
     __fds_bits: [16]__fd_mask = @import("std").mem.zeroes([16]__fd_mask),
 };
-pub extern fn select(__nfds: c_int, noalias __readfds: [*c]fd_set, noalias __writefds: [*c]fd_set, noalias __exceptfds: [*c]fd_set, noalias __timeout: [*c]struct_timeval) c_int;
+// select: removed (unused extern)
 const struct_unnamed_1 = extern struct {
     __low: c_uint = @import("std").mem.zeroes(c_uint),
     __high: c_uint = @import("std").mem.zeroes(c_uint),
 };
-pub extern fn random() c_long;
+// random: removed (unused extern)
 pub const malloc = libc_shim.malloc;
 pub const calloc = libc_shim.calloc;
 pub const free = libc_shim.free;
@@ -355,19 +355,19 @@ pub fn clampedLerp(arg_part: f64, arg_from: f64, arg_to: f64) callconv(.C) f64 {
     if (part >= @as(f64, @floatFromInt(@as(c_int, 1)))) return to;
     return lerp(part, from, to);
 }
-pub extern fn cos(__x: f64) f64;
-pub extern fn sin(__x: f64) f64;
-pub extern fn exp(__x: f64) f64;
+pub inline fn cos(__x: f64) f64 { return @cos(__x); }
+pub inline fn sin(__x: f64) f64 { return @sin(__x); }
+// exp: removed (unused extern)
 pub const pow = libc_shim.pow;
-pub extern fn sqrt(__x: f64) f64;
-pub extern fn ceil(__x: f64) f64;
-pub extern fn fabs(__x: f64) f64;
-pub extern fn floor(__x: f64) f64;
+pub inline fn sqrt(__x: f64) f64 { return @sqrt(__x); }
+pub inline fn ceil(__x: f64) f64 { return @ceil(__x); }
+// fabs: removed (unused extern)
+pub inline fn floor(__x: f64) f64 { return @floor(__x); }
 pub const nan = libc_shim.nan;
-pub extern fn erfc(f64) f64;
-pub extern fn round(__x: f64) f64;
-pub extern fn sqrtf(__x: f32) f32;
-pub extern fn fabsf(__x: f32) f32;
+// erfc: removed (unused extern)
+// round: removed (unused extern)
+pub inline fn sqrtf(__x: f32) f32 { return @sqrt(__x); }
+pub inline fn fabsf(__x: f32) f32 { return @abs(__x); }
 pub extern var signgam: c_int;
 pub const struct_PerlinNoise = extern struct {
     d: [257]u8 = @import("std").mem.zeroes([257]u8),
@@ -2225,10 +2225,28 @@ pub export fn mapVoronoiPlane(_: u64, out: [*c]c_int, src: [*c]c_int, _: c_int, 
     var i: usize = 0;
     while (i < n) : (i += 1) out[i] = src[i];
 }
-pub extern fn memcpy(__dest: ?*anyopaque, __src: ?*const anyopaque, __n: c_ulong) ?*anyopaque;
-pub extern fn memmove(__dest: ?*anyopaque, __src: ?*const anyopaque, __n: c_ulong) ?*anyopaque;
-pub extern fn memset(__s: ?*anyopaque, __c: c_int, __n: c_ulong) ?*anyopaque;
-pub extern fn index(__s: [*c]const u8, __c: c_int) [*c]u8;
+pub inline fn memcpy(__dest: ?*anyopaque, __src: ?*const anyopaque, __n: c_ulong) ?*anyopaque {
+    const n: usize = @intCast(__n);
+    const dest_bytes = @as([*]u8, @ptrCast(@alignCast(__dest.?)));
+    const src_bytes = @as([*]const u8, @ptrCast(@alignCast(__src.?)));
+    @memcpy(dest_bytes[0..n], src_bytes[0..n]);
+    return __dest;
+}
+pub inline fn memmove(__dest: ?*anyopaque, __src: ?*const anyopaque, __n: c_ulong) ?*anyopaque {
+    const n: usize = @intCast(__n);
+    const dest_bytes = @as([*]u8, @ptrCast(@alignCast(__dest.?)));
+    const src_bytes = @as([*]const u8, @ptrCast(@alignCast(__src.?)));
+    const std = @import("std");
+    std.mem.copyBackwards(u8, dest_bytes[0..n], src_bytes[0..n]);
+    return __dest;
+}
+pub inline fn memset(__s: ?*anyopaque, __c: c_int, __n: c_ulong) ?*anyopaque {
+    const n: usize = @intCast(__n);
+    const dest_bytes = @as([*]u8, @ptrCast(@alignCast(__s.?)));
+    @memset(dest_bytes[0..n], @intCast(@as(u32, @bitCast(__c)) & 0xff));
+    return __s;
+}
+// index: removed (unused extern)
 pub export const warmBiomes: [6]c_int = [6]c_int{
     desert,
     desert,
