@@ -1381,6 +1381,104 @@ fn combinedBiomeThreshold(
 
     const biome_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
 
+    // --- Coarse prescan at stride 4 for quick accept/reject ---
+    // Sample a sparse grid first; if any biome gets zero coarse hits we reject
+    // early, and if every biome already meets its threshold we accept.
+    if (!use_points and min_stride == 1 and max_req.coarse_offsets_4.len > 0 and
+        max_req.coarse_offsets_4.len < iter_offsets.len)
+    {
+        const coarse4 = max_req.coarse_offsets_4;
+        var coarse_counts: [MAX_COMBINED_BIOMES]i32 = [_]i32{0} ** MAX_COMBINED_BIOMES;
+        var any_zero = false;
+
+        for (coarse4) |off| {
+            const x = anchor.x + off.dx;
+            const z = anchor.z + off.dz;
+            // Try each biome's bounds to resolve the point
+            var resolved_id: i32 = c.none;
+            for (0..n) |bi| {
+                const b = biome_reqs[bi].climate_bounds;
+                if (b) |bounds| {
+                    if (bounds.valid) {
+                        const id = fastBiomeIdWithFeasibility(g, x, z, bounds);
+                        if (id != c.none) {
+                            resolved_id = id;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (resolved_id == c.none) continue;
+            for (0..n) |bi| {
+                if (resolved_id == biome_reqs[bi].biome_id and off.dist2 <= biome_reqs[bi].radius2) {
+                    coarse_counts[bi] += 1;
+                }
+            }
+        }
+
+        // Check for quick accept/reject
+        var all_satisfied = true;
+        for (0..n) |bi| {
+            if (coarse_counts[bi] == 0) {
+                any_zero = true;
+                break;
+            }
+            if (coarse_counts[bi] < biome_reqs[bi].min_count) {
+                all_satisfied = false;
+            }
+        }
+        if (any_zero) {
+            // At least one biome has zero coarse hits → reject
+            for (0..n) |bi| {
+                evals[biome_eval_indices[bi]] = .{
+                    .epoch = eval_epoch,
+                    .computed = true,
+                    .finalized = false,
+                    .matched = coarse_counts[bi] >= biome_reqs[bi].min_count,
+                    .count = if (coarse_counts[bi] >= biome_reqs[bi].min_count) biome_reqs[bi].min_count else 0,
+                    .best_dist2 = std.math.maxInt(i64),
+                };
+            }
+            for (0..n_atoms) |ai| {
+                const idx = biome_atom_indices[ai];
+                const alias_idx = aliases[idx];
+                if (alias_idx != idx and evals[alias_idx].epoch == eval_epoch and evals[alias_idx].computed) {
+                    evals[idx] = evals[alias_idx];
+                }
+            }
+            if (active_eval_telemetry) |telemetry| {
+                telemetry.biome_constraint_evals +%= @as(u64, @intCast(n));
+                telemetry.biome_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - biome_start));
+            }
+            return false;
+        }
+        if (all_satisfied) {
+            for (0..n) |bi| {
+                evals[biome_eval_indices[bi]] = .{
+                    .epoch = eval_epoch,
+                    .computed = true,
+                    .finalized = false,
+                    .matched = true,
+                    .count = biome_reqs[bi].min_count,
+                    .best_dist2 = std.math.maxInt(i64),
+                };
+            }
+            for (0..n_atoms) |ai| {
+                const idx = biome_atom_indices[ai];
+                const alias_idx = aliases[idx];
+                if (alias_idx != idx and evals[alias_idx].epoch == eval_epoch and evals[alias_idx].computed) {
+                    evals[idx] = evals[alias_idx];
+                }
+            }
+            if (active_eval_telemetry) |telemetry| {
+                telemetry.biome_constraint_evals +%= @as(u64, @intCast(n));
+                telemetry.biome_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - biome_start));
+            }
+            return true;
+        }
+        // Uncertain: fall through to full-resolution evaluation
+    }
+
     // Biome ID cache. We only cache resolved biome IDs; c.none (fast-path
     // infeasible) is intentionally left uncached so later biome phases can
     // resample with their own climate bounds.
