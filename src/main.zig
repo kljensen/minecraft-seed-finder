@@ -128,33 +128,29 @@ fn parseRangeSpec(spec: []const u8) ?struct { name: []const u8, min_val: ?f32, m
     return .{ .name = name, .min_val = min_val, .max_val = max_val, .radius = radius };
 }
 
+const climate_param_map = std.StaticStringMap(types.ClimateParam).initComptime(.{
+    .{ "continentalness", .continentalness },
+    .{ "erosion", .erosion },
+    .{ "peaks_valleys", .peaks_valleys },
+    .{ "weirdness", .weirdness },
+    .{ "temperature", .temperature },
+    .{ "humidity", .humidity },
+});
+
 fn parseClimateParam(name: []const u8) ?types.ClimateParam {
-    const params = .{
-        .{ "continentalness", types.ClimateParam.continentalness },
-        .{ "erosion", types.ClimateParam.erosion },
-        .{ "peaks_valleys", types.ClimateParam.peaks_valleys },
-        .{ "weirdness", types.ClimateParam.weirdness },
-        .{ "temperature", types.ClimateParam.temperature },
-        .{ "humidity", types.ClimateParam.humidity },
-    };
-    inline for (params) |p| {
-        if (std.mem.eql(u8, name, p[0])) return p[1];
-    }
-    return null;
+    return climate_param_map.get(name);
 }
 
+const terrain_stat_map = std.StaticStringMap(types.TerrainStat).initComptime(.{
+    .{ "mean_height", .mean_height },
+    .{ "min_height", .min_height },
+    .{ "max_height", .max_height },
+    .{ "height_range", .height_range },
+    .{ "height_std", .height_std },
+});
+
 fn parseTerrainStat(name: []const u8) ?types.TerrainStat {
-    const stats = .{
-        .{ "mean_height", types.TerrainStat.mean_height },
-        .{ "min_height", types.TerrainStat.min_height },
-        .{ "max_height", types.TerrainStat.max_height },
-        .{ "height_range", types.TerrainStat.height_range },
-        .{ "height_std", types.TerrainStat.height_std },
-    };
-    inline for (stats) |s| {
-        if (std.mem.eql(u8, name, s[0])) return s[1];
-    }
-    return null;
+    return terrain_stat_map.get(name);
 }
 
 fn parseAnchor(spec: []const u8) ?c.Pos {
