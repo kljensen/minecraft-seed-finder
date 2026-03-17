@@ -3,12 +3,17 @@
 A Minecraft seed finder written in Zig. Search for seeds by biome, structure,
 or any combination using boolean expressions.
 
-Based on [cubiomes](https://github.com/Cubitect/cubiomes) by Cubitect,
-auto-translated to Zig with targeted optimizations on the hot paths.
+Built on [cubiomes](https://github.com/Cubitect/cubiomes) by Cubitect — an
+excellent C library that reverse-engineers Minecraft's world generation.
+The generation logic was initially auto-translated from cubiomes into Zig and
+then incrementally rewritten: many core functions are now idiomatic Zig, while
+some low-level noise routines remain close to the original C (where the
+auto-translated code still produces better machine code). The search layer adds
+targeted optimizations on top.
 
 - **Bedrock + Java**, MC 1.18 – 1.21.1
 - **Biome + structure search** with radius constraints, count thresholds, and `and`/`or`/`not` composition
-- **Two key optimizations** — constraint reordering and climate early-exit — account for 10–21× on combined queries (see [Performance](#performance))
+- **Key optimizations** — constraint reordering, climate early-exit, and coarse-to-fine biome prescans — yield 10–21× on combined queries in ablation tests (see [Performance](#performance))
 - **Multi-threaded** — near-linear scaling with `--threads auto`
 - **Resumable** — checkpoint and resume long scans
 - **Output**: `text`, `jsonl`, `csv`; pipe-friendly or write to file
@@ -181,25 +186,27 @@ just conformance               # full CLI conformance (requires C sources)
 
 ### Ablation: how much do the optimizations matter?
 
-To measure the combined effect of the two main algorithmic choices —
-constraint reordering and climate early-exit — `bench/c_reference.c` implements
-the exact same search *without* them. Same circular biome grid, same
-impossible-fail short-circuit, same structure region math, but it calls
-`getBiomeAt()` unconditionally (all 6 climate parameters every time) and always
-checks biomes before structures (naive ordering).
+To measure the combined effect of the algorithmic choices —
+constraint reordering, climate early-exit, and coarse-to-fine biome prescans —
+`bench/c_reference.c` implements the exact same search *without* them. Same
+circular biome grid, same impossible-fail short-circuit, same structure region
+math, but it calls `getBiomeAt()` unconditionally (all 6 climate parameters
+every time) and always checks biomes before structures (naive ordering).
 
 This is an ablation test, not a comparison against another tool.
 Reproduce with `sh scripts/bench_vs_c_ref.sh`.
 
-Anchored at (0,0), single-threaded, Java edition, MC 1.21.1 on Apple M1 Max.
-Both find identical seeds.
+The numbers below were measured at one point during development (Apple M1 Max,
+anchored at (0,0), single-threaded, Java edition, MC 1.21.1). The optimized
+side has gotten faster since these were recorded, so the actual gap today is
+likely larger. Both versions find identical seeds.
 
 | Query | Without opts | With opts | Difference |
 |-------|-------------|-----------|------------|
-| `cherry_grove:1@300` + `village:400` + `outpost:800` (first 5) |  19.7s |  1.9s | 10x |
-| `ice_spikes:1@500`   + `village:400` + `outpost:600` (first 5) | 102.5s |  4.8s | 21x |
+| `cherry_grove:1@300` + `village:400` + `outpost:800` (first 5) |  19.7s |  1.9s | 10× |
+| `ice_spikes:1@500`   + `village:400` + `outpost:600` (first 5) | 102.5s |  4.8s | 21× |
 
-Why so large? The two effects multiply:
+Why so large? The effects multiply:
 
 **Constraint reordering** evaluates cheap structure constraints first. Both
 queries require two structures, which together reject ~99% of seeds before any
@@ -209,6 +216,10 @@ every seed.
 **Climate early-exit** samples climate parameters one at a time per biome grid
 point, stopping as soon as one parameter rules out the target biome. The
 unoptimized version evaluates all 6 parameters unconditionally.
+
+**Coarse-to-fine biome prescans** check a sparse grid first (stride-8) before
+filling in the full resolution, skipping most of the fine-grained sampling for
+seeds that clearly pass or fail.
 
 For structure-only queries there is no meaningful difference — both use the
 same region coordinate math and viability checks.
@@ -229,23 +240,38 @@ embarrassingly parallel.
 
 ### Optimization history
 
-The Zig port was iteratively profiled and optimized. Key wins (measured as
-internal before/after on a hard biome+structure query):
+The port was iteratively profiled and optimized. Speedups below are
+before/after measurements from individual commits on specific benchmark
+queries. They don't compound straightforwardly — later wins sometimes overlap
+with earlier ones.
+
+**Algorithmic changes:**
 
 | Speedup | Optimization |
 |---------|-------------|
-| ~1.3x | Climate parameter early-exit — skip remaining noise calls when earlier parameters already rule out the target biome |
-| 1.56x | Defer `getSpawn` for anchor queries — spawn was 36% of per-seed cost and wasted on seeds that fail constraints |
-| 1.06x | Cached sequential multi-biome scan — share noise cache across biome constraints |
-| 1.04x | Rewrite `get_resulting_node`/`get_np_dist` biome tree walk as idiomatic Zig |
-| 1.04x | Structure eval: region sorting by distance + constraint cost ordering |
+| ~1.3× | Climate parameter early-exit — skip remaining noise calls when earlier parameters already rule out the target biome |
+| 1.56× | Defer `getSpawn` for anchor queries — spawn was 36% of per-seed cost and wasted on seeds that fail constraints |
+| 2.7× | Two-phase coarse-then-fine biome scan — stride-4 prescan, then fill only when the coarse pass is inconclusive (Q1 6.16s→2.28s) |
+| 2.1× | Three-phase coarse prescan — stride-8, stride-4, then full (Q1 2.42s→1.14s) |
+| 4.1× | Coarse prescan for combined biome threshold queries (Q2 3.20s→0.79s) |
+| 1.6× | Stride-8 coarse prescan for single-biome queries (Q1 1.35s→0.84s) |
+
+**Smaller wins (1–6%):**
+
+| Speedup | Optimization |
+|---------|-------------|
+| 1.06× | Cached sequential multi-biome scan — share noise cache across biome constraints |
+| 1.04× | Rewrite `get_resulting_node`/`get_np_dist` biome tree walk as idiomatic Zig |
+| 1.04× | Structure eval: region sorting by distance + constraint cost ordering |
+| ~1% | Single-sample combined biome cache via union bounds (Q2 0.84s→0.78s) |
+| ~1% | Early-exit on humidity feasibility in fast biome path |
 
 ### What didn't work
 
 | Result | Attempt |
 |--------|---------|
-| -1.2% | Rewriting `samplePerlin` as clean Zig — the auto-translated C code generates better machine code |
-| -8.7% | Union climate bounds single-pass — merging per-biome bounds makes them too wide, defeating early-exit |
+| −1.2% | Rewriting `samplePerlin` as clean Zig — the auto-translated C code generates better machine code |
+| −8.7% | Union climate bounds single-pass — merging per-biome bounds makes them too wide, defeating early-exit |
 | 0% | SIMD vectorization — not on the hot path (only used in shadow probes) |
 | 0% | Cached structure config fast-path — already fast enough |
 
@@ -253,14 +279,24 @@ internal before/after on a hard biome+structure query):
 
 The core biome and structure generation logic comes from
 [cubiomes](https://github.com/Cubitect/cubiomes) by Cubitect, a C library that
-reimplements Minecraft's world generation. This project auto-translated cubiomes
-into Zig (`src/cubiomes_port.zig`, ~72K lines) and then applied targeted
-optimizations to the hot paths — climate parameter early-exit, biome tree
-rewrites, deferred spawn computation, and cached multi-biome scanning.
+reimplements Minecraft's world generation. Cubiomes is the foundation — without
+it this project would not exist.
 
-The search loop iterates over seeds, evaluates structure placement via region
-coordinate math, and samples biome noise to check constraints. A boolean
-expression engine lets you compose constraints with `and`/`or`/`not` logic.
+The generation code was initially auto-translated from cubiomes C into Zig.
+Since then, many core functions (`climateToBiome`, `sampleBiomeNoise`,
+`sampleSimplex2D`, `biomeExists`, RNG/noise initialization, spline evaluation,
+and others) have been rewritten as idiomatic Zig. Some hot inner loops like
+`samplePerlin` remain close to the original C translation where it produces
+better machine code. The generation core lives in `src/cubiomes_port.zig`
+(~15K lines) plus ~47K lines of extracted biome tree lookup tables in
+`src/btree_data.zig`.
+
+On top of the generation layer, the search evaluator (`src/search_eval.zig`)
+adds constraint reordering, climate early-exit, and coarse-to-fine biome
+prescans. The search loop iterates over seeds, evaluates structure placement
+via region coordinate math, and samples biome noise to check constraints. A
+boolean expression engine lets you compose constraints with `and`/`or`/`not`
+logic.
 
 ## License
 
