@@ -1379,6 +1379,34 @@ fn finalizeCombinedBiomeThreshold(
     }
 }
 
+/// Merge per-biome union climate bounds into a single union-over-target-biomes
+/// bound. Returns null unless every biome has valid precomputed bounds.
+fn combineTargetBiomeBounds(biome_reqs: []const *const BiomeReq) ?BiomeClimateBounds {
+    if (biome_reqs.len == 0) return null;
+
+    const first_bounds = biome_reqs[0].climate_bounds orelse return null;
+    if (!first_bounds.valid) return null;
+
+    var out = BiomeClimateBounds{
+        .ranges = first_bounds.ranges,
+        .valid = true,
+        .global = first_bounds.global,
+    };
+
+    for (biome_reqs[1..]) |req| {
+        const bounds = req.climate_bounds orelse return null;
+        if (!bounds.valid) return null;
+        for (0..6) |dim| {
+            out.ranges[dim].lo = @min(out.ranges[dim].lo, bounds.ranges[dim].lo);
+            out.ranges[dim].hi = @max(out.ranges[dim].hi, bounds.ranges[dim].hi);
+            out.global[dim].lo = @min(out.global[dim].lo, bounds.global[dim].lo);
+            out.global[dim].hi = @max(out.global[dim].hi, bounds.global[dim].hi);
+        }
+    }
+
+    return out;
+}
+
 /// Cached sequential biome threshold: evaluates biome constraints sequentially
 /// (preserving short-circuit) but caches biome_ids so subsequent biome scans
 /// reuse noise computation from earlier scans. Each scan uses per-biome climate
@@ -1433,6 +1461,9 @@ fn combinedBiomeThreshold(
     if (total_points > MAX_BIOME_CACHE_POINTS or total_points == 0) return null;
     if (!use_fast) return null; // cache only helps with fast path (climate early-exit)
 
+    const combined_bounds = combineTargetBiomeBounds(biome_reqs[0..n]);
+    const can_single_sample_cache = combined_bounds != null;
+
     const biome_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
 
     // --- Coarse prescans for quick accept/reject ---
@@ -1451,20 +1482,25 @@ fn combinedBiomeThreshold(
         for (coarse4) |off| {
             const x = anchor.x + off.dx;
             const z = anchor.z + off.dz;
-            // Try each biome's bounds to resolve the point
-            var resolved_id: i32 = c.none;
-            for (0..n) |bi| {
-                const b = biome_reqs[bi].climate_bounds;
-                if (b) |bounds| {
-                    if (bounds.valid) {
-                        const id = fastBiomeIdWithFeasibility(g, x, z, bounds);
-                        if (id != c.none) {
-                            resolved_id = id;
-                            break;
+            const resolved_id: i32 = if (combined_bounds) |bounds|
+                fastBiomeIdWithFeasibility(g, x, z, bounds)
+            else blk: {
+                // Fallback: resolve by trying each biome bound in order.
+                var id: i32 = c.none;
+                for (0..n) |bi| {
+                    const b = biome_reqs[bi].climate_bounds;
+                    if (b) |bounds| {
+                        if (bounds.valid) {
+                            const sampled = fastBiomeIdWithFeasibility(g, x, z, bounds);
+                            if (sampled != c.none) {
+                                id = sampled;
+                                break;
+                            }
                         }
                     }
                 }
-            }
+                break :blk id;
+            };
             if (resolved_id == c.none) continue;
             for (0..n) |bi| {
                 if (resolved_id == biome_reqs[bi].biome_id and off.dist2 <= biome_reqs[bi].radius2) {
@@ -1512,9 +1548,9 @@ fn combinedBiomeThreshold(
         // Uncertain: fall through to full-resolution evaluation
     }
 
-    // Biome ID cache. We only cache resolved biome IDs; c.none (fast-path
-    // infeasible) is intentionally left uncached so later biome phases can
-    // resample with their own climate bounds.
+    // Biome ID cache. When all target biomes have valid bounds we resolve with
+    // a union bound and cache every result (including c.none); otherwise we
+    // preserve legacy behavior and only cache non-none IDs.
     var biome_cache = [_]?i32{null} ** MAX_BIOME_CACHE_POINTS;
 
     // Sequential evaluation with caching: preserves short-circuit
@@ -1529,12 +1565,14 @@ fn combinedBiomeThreshold(
         if (use_points) {
             for (max_req.points, 0..) |pt, pi| {
                 const biome_id: i32 = biome_cache[pi] orelse blk: {
-                    // Not cached: compute with this biome's bounds.
-                    const sampled = if (has_valid_bounds)
+                    // Not cached: resolve once for all target biomes when possible.
+                    const sampled = if (can_single_sample_cache)
+                        fastBiomeIdWithFeasibility(g, pt.x, pt.z, combined_bounds.?)
+                    else if (has_valid_bounds)
                         fastBiomeIdWithFeasibility(g, pt.x, pt.z, bounds.?)
                     else
                         c.getBiomeAt(g, 1, pt.x, 0, pt.z);
-                    if (sampled != c.none) biome_cache[pi] = sampled;
+                    if (can_single_sample_cache or sampled != c.none) biome_cache[pi] = sampled;
                     break :blk sampled;
                 };
                 if (biome_id == c.none) continue;
@@ -1553,11 +1591,13 @@ fn combinedBiomeThreshold(
                 const x = anchor.x + off.dx;
                 const z = anchor.z + off.dz;
                 const biome_id: i32 = biome_cache[oi] orelse blk: {
-                    const sampled = if (has_valid_bounds)
+                    const sampled = if (can_single_sample_cache)
+                        fastBiomeIdWithFeasibility(g, x, z, combined_bounds.?)
+                    else if (has_valid_bounds)
                         fastBiomeIdWithFeasibility(g, x, z, bounds.?)
                     else
                         c.getBiomeAt(g, 1, x, 0, z);
-                    if (sampled != c.none) biome_cache[oi] = sampled;
+                    if (can_single_sample_cache or sampled != c.none) biome_cache[oi] = sampled;
                     break :blk sampled;
                 };
                 if (biome_id == c.none) continue;
