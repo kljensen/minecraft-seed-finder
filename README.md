@@ -252,16 +252,20 @@ before/after measurements from individual commits on specific benchmark
 queries. They don't compound straightforwardly — later wins sometimes overlap
 with earlier ones.
 
+Speedups were measured on four internal benchmark queries: a single rare
+biome, a multi-biome scan, a structure-only query, and a mixed
+biome+structure query.
+
 **Algorithmic changes:**
 
 | Speedup | Optimization |
 |---------|-------------|
 | ~1.3× | Climate parameter early-exit — skip remaining noise calls when earlier parameters already rule out the target biome |
 | 1.56× | Defer `getSpawn` for anchor queries — spawn was 36% of per-seed cost and wasted on seeds that fail constraints |
-| 2.7× | Two-phase coarse-then-fine biome scan — stride-4 prescan, then fill only when the coarse pass is inconclusive (Q1 6.16s→2.28s) |
-| 2.1× | Three-phase coarse prescan — stride-8, stride-4, then full (Q1 2.42s→1.14s) |
-| 4.1× | Coarse prescan for combined biome threshold queries (Q2 3.20s→0.79s) |
-| 1.6× | Stride-8 coarse prescan for single-biome queries (Q1 1.35s→0.84s) |
+| 2.7× | Two-phase coarse-then-fine biome scan — stride-4 prescan, then fill only when the coarse pass is inconclusive (rare biome: 6.16s→2.28s) |
+| 2.1× | Three-phase coarse prescan — stride-8, stride-4, then full (rare biome: 2.42s→1.14s) |
+| 4.1× | Coarse prescan for combined biome threshold queries (multi-biome: 3.20s→0.79s) |
+| 1.6× | Stride-8 coarse prescan for single-biome queries (rare biome: 1.35s→0.84s) |
 
 **Smaller wins (1–6%):**
 
@@ -270,7 +274,7 @@ with earlier ones.
 | 1.06× | Cached sequential multi-biome scan — share noise cache across biome constraints |
 | 1.04× | Rewrite `get_resulting_node`/`get_np_dist` biome tree walk as idiomatic Zig |
 | 1.04× | Structure eval: region sorting by distance + constraint cost ordering |
-| ~1% | Single-sample combined biome cache via union bounds (Q2 0.84s→0.78s) |
+| ~1% | Single-sample combined biome cache via union bounds (multi-biome: 0.84s→0.78s) |
 | ~1% | Early-exit on humidity feasibility in fast biome path |
 
 ### What didn't work
