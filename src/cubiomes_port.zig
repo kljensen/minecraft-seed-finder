@@ -1042,69 +1042,55 @@ pub const deep_dark: c_int = 183;
 pub const mangrove_swamp: c_int = 184;
 pub const cherry_grove: c_int = 185;
 pub const pale_garden: c_int = 186;
-pub fn biomeExists(arg_mc: c_int, arg_id: c_int) c_int {
-    var mc = arg_mc;
-    _ = &mc;
-    var id = arg_id;
-    _ = &id;
+pub fn biomeExists(mc: c_int, id: c_int) c_int {
     if (mc >= MC_1_18) {
-        if ((id >= soul_sand_valley) and (id <= basalt_deltas)) return 1;
-        if ((id >= small_end_islands) and (id <= end_barrens)) return 1;
+        if (id >= soul_sand_valley and id <= basalt_deltas) return 1;
+        if (id >= small_end_islands and id <= end_barrens) return 1;
         if (id == pale_garden) return @intFromBool(mc >= MC_1_21_WD);
         if (id == cherry_grove) return @intFromBool(mc >= MC_1_20);
-        if ((id == deep_dark) or (id == mangrove_swamp)) return @intFromBool(mc >= MC_1_19_2);
-        while (true) {
-            switch (id) {
-                @as(c_int, 0), @as(c_int, 1), @as(c_int, 2), @as(c_int, 3), @as(c_int, 4), @as(c_int, 5), @as(c_int, 6), @as(c_int, 7), @as(c_int, 8), @as(c_int, 9), @as(c_int, 10), @as(c_int, 11), @as(c_int, 12), @as(c_int, 14), @as(c_int, 16), @as(c_int, 21), @as(c_int, 23), @as(c_int, 24), @as(c_int, 25), @as(c_int, 26), @as(c_int, 27), @as(c_int, 29), @as(c_int, 30), @as(c_int, 32), @as(c_int, 34), @as(c_int, 35), @as(c_int, 36), @as(c_int, 37), @as(c_int, 38), @as(c_int, 44), @as(c_int, 45), @as(c_int, 46), @as(c_int, 47), @as(c_int, 48), @as(c_int, 49), @as(c_int, 50), @as(c_int, 129), @as(c_int, 131), @as(c_int, 132), @as(c_int, 140), @as(c_int, 155), @as(c_int, 160), @as(c_int, 163), @as(c_int, 165), @as(c_int, 168), @as(c_int, 174), @as(c_int, 175), @as(c_int, 177), @as(c_int, 178), @as(c_int, 179), @as(c_int, 182), @as(c_int, 180), @as(c_int, 181) => return 1,
-                else => return 0,
-            }
-            break;
-        }
+        if (id == deep_dark or id == mangrove_swamp) return @intFromBool(mc >= MC_1_19_2);
+
+        return switch (id) {
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 21, 23, 24, 25, 26, 27, 29, 30, 32, 34, 35, 36, 37, 38, 44, 45, 46, 47, 48, 49, 50, 129, 131, 132, 140, 155, 160, 163, 165, 168, 174, 175, 177, 178, 179, 180, 181, 182 => 1,
+            else => 0,
+        };
     }
+
     if (mc <= MC_B1_7) {
-        while (true) {
-            switch (id) {
-                @as(c_int, 1), @as(c_int, 2), @as(c_int, 4), @as(c_int, 5), @as(c_int, 6), @as(c_int, 12), @as(c_int, 35), @as(c_int, 51), @as(c_int, 52), @as(c_int, 53), @as(c_int, 0), @as(c_int, 10) => return 1,
-                else => return 0,
-            }
-            break;
-        }
+        return switch (id) {
+            0, 1, 2, 4, 5, 6, 10, 12, 35, 51, 52, 53 => 1,
+            else => 0,
+        };
     }
+
     if (mc <= MC_B1_8) {
-        while (true) {
-            switch (id) {
-                @as(c_int, 10), @as(c_int, 11), @as(c_int, 12), @as(c_int, 14), @as(c_int, 15), @as(c_int, 9) => return 0,
-                else => {},
-            }
-            break;
-        }
-    }
-    if (mc <= MC_1_0) {
-        while (true) {
-            switch (id) {
-                @as(c_int, 13), @as(c_int, 16), @as(c_int, 17), @as(c_int, 18), @as(c_int, 19), @as(c_int, 20) => return 0,
-                else => {},
-            }
-            break;
-        }
-    }
-    if ((id >= ocean) and (id <= mountain_edge)) return 1;
-    if ((id >= jungle) and (id <= jungle_hills)) return @intFromBool(mc >= MC_1_2);
-    if ((id >= jungle_edge) and (id <= badlands_plateau)) return @intFromBool(mc >= MC_1_7);
-    if ((id >= small_end_islands) and (id <= end_barrens)) return @intFromBool(mc >= MC_1_9);
-    if ((id >= warm_ocean) and (id <= deep_frozen_ocean)) return @intFromBool(mc >= MC_1_13);
-    while (true) {
         switch (id) {
-            @as(c_int, 127) => return @intFromBool(mc >= MC_1_9),
-            @as(c_int, 129), @as(c_int, 130), @as(c_int, 131), @as(c_int, 132), @as(c_int, 133), @as(c_int, 134), @as(c_int, 140), @as(c_int, 149), @as(c_int, 151), @as(c_int, 155), @as(c_int, 156), @as(c_int, 157), @as(c_int, 158), @as(c_int, 160), @as(c_int, 161), @as(c_int, 162), @as(c_int, 163), @as(c_int, 164), @as(c_int, 165), @as(c_int, 166), @as(c_int, 167) => return @intFromBool(mc >= MC_1_7),
-            @as(c_int, 168), @as(c_int, 169) => return @intFromBool(mc >= MC_1_14),
-            @as(c_int, 170), @as(c_int, 171), @as(c_int, 172), @as(c_int, 173) => return @intFromBool(mc >= MC_1_16_1),
-            @as(c_int, 174), @as(c_int, 175) => return @intFromBool(mc >= MC_1_17),
-            else => return 0,
+            9, 10, 11, 12, 14, 15 => return 0,
+            else => {},
         }
-        break;
     }
-    return 0;
+
+    if (mc <= MC_1_0) {
+        switch (id) {
+            13, 16, 17, 18, 19, 20 => return 0,
+            else => {},
+        }
+    }
+
+    if (id >= ocean and id <= mountain_edge) return 1;
+    if (id >= jungle and id <= jungle_hills) return @intFromBool(mc >= MC_1_2);
+    if (id >= jungle_edge and id <= badlands_plateau) return @intFromBool(mc >= MC_1_7);
+    if (id >= small_end_islands and id <= end_barrens) return @intFromBool(mc >= MC_1_9);
+    if (id >= warm_ocean and id <= deep_frozen_ocean) return @intFromBool(mc >= MC_1_13);
+
+    return switch (id) {
+        127 => @intFromBool(mc >= MC_1_9),
+        129, 130, 131, 132, 133, 134, 140, 149, 151, 155, 156, 157, 158, 160, 161, 162, 163, 164, 165, 166, 167 => @intFromBool(mc >= MC_1_7),
+        168, 169 => @intFromBool(mc >= MC_1_14),
+        170, 171, 172, 173 => @intFromBool(mc >= MC_1_16_1),
+        174, 175 => @intFromBool(mc >= MC_1_17),
+        else => 0,
+    };
 }
 pub fn isOverworld(arg_mc: c_int, arg_id: c_int) c_int {
     var mc = arg_mc;
