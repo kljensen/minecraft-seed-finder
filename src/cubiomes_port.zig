@@ -454,56 +454,50 @@ pub fn samplePerlin(arg_noise: [*c]const PerlinNoise, arg_d1: f64, arg_d2: f64, 
     l5 = lerp(t2, l5, l7);
     return lerp(t3, l1, l5);
 }
-pub fn sampleSimplex2D(arg_noise: [*c]const PerlinNoise, arg_x: f64, arg_y: f64) f64 {
-    var noise = arg_noise;
-    _ = &noise;
-    var x = arg_x;
-    _ = &x;
-    var y = arg_y;
-    _ = &y;
-    const SKEW: f64 = 0.5 * (sqrt(3.0) - 1.0);
-    _ = &SKEW;
-    const UNSKEW: f64 = (3.0 - sqrt(3.0)) / 6.0;
-    _ = &UNSKEW;
-    var hf: f64 = (x + y) * SKEW;
-    _ = &hf;
-    var hx: c_int = @as(c_int, @intFromFloat(floor(x + hf)));
-    _ = &hx;
-    var hz: c_int = @as(c_int, @intFromFloat(floor(y + hf)));
-    _ = &hz;
-    var mhxz: f64 = @as(f64, @floatFromInt(hx + hz)) * UNSKEW;
-    _ = &mhxz;
-    var x0: f64 = x - (@as(f64, @floatFromInt(hx)) - mhxz);
-    _ = &x0;
-    var y0_1: f64 = y - (@as(f64, @floatFromInt(hz)) - mhxz);
-    _ = &y0_1;
-    var offx: c_int = @intFromBool(x0 > y0_1);
-    _ = &offx;
-    var offz: c_int = @intFromBool(!(offx != 0));
-    _ = &offz;
-    var x1: f64 = (x0 - @as(f64, @floatFromInt(offx))) + UNSKEW;
-    _ = &x1;
-    var y1_2: f64 = (y0_1 - @as(f64, @floatFromInt(offz))) + UNSKEW;
-    _ = &y1_2;
-    var x2: f64 = (x0 - 1.0) + (2.0 * UNSKEW);
-    _ = &x2;
-    var y2: f64 = (y0_1 - 1.0) + (2.0 * UNSKEW);
-    _ = &y2;
-    var gi0: c_int = @as(c_int, @bitCast(@as(c_uint, noise.*.d[@as(c_uint, @intCast(@as(c_int, 255) & hz))])));
-    _ = &gi0;
-    var gi1: c_int = @as(c_int, @bitCast(@as(c_uint, noise.*.d[@as(c_uint, @intCast(@as(c_int, 255) & (hz + offz)))])));
-    _ = &gi1;
-    var gi2: c_int = @as(c_int, @bitCast(@as(c_uint, noise.*.d[@as(c_uint, @intCast(@as(c_int, 255) & (hz + @as(c_int, 1))))])));
-    _ = &gi2;
-    gi0 = @as(c_int, @bitCast(@as(c_uint, noise.*.d[@as(c_uint, @intCast(@as(c_int, 255) & (gi0 + hx)))])));
-    gi1 = @as(c_int, @bitCast(@as(c_uint, noise.*.d[@as(c_uint, @intCast(@as(c_int, 255) & ((gi1 + hx) + offx)))])));
-    gi2 = @as(c_int, @bitCast(@as(c_uint, noise.*.d[@as(c_uint, @intCast(@as(c_int, 255) & ((gi2 + hx) + @as(c_int, 1))))])));
-    var t: f64 = 0;
-    _ = &t;
-    t += simplexGrad(@import("std").zig.c_translation.signedRemainder(gi0, @as(c_int, 12)), x0, y0_1, 0.0, 0.5);
-    t += simplexGrad(@import("std").zig.c_translation.signedRemainder(gi1, @as(c_int, 12)), x1, y1_2, 0.0, 0.5);
-    t += simplexGrad(@import("std").zig.c_translation.signedRemainder(gi2, @as(c_int, 12)), x2, y2, 0.0, 0.5);
-    return 70.0 * t;
+/// 2D simplex noise sample. Uses the standard skew/unskew transform to map
+/// the input into simplex (triangular) grid space, then evaluates gradient
+/// contributions from the three surrounding simplex corners.
+pub fn sampleSimplex2D(noise: [*c]const PerlinNoise, x: f64, y: f64) f64 {
+    const SKEW: f64 = 0.5 * (@sqrt(3.0) - 1.0);
+    const UNSKEW: f64 = (3.0 - @sqrt(3.0)) / 6.0;
+
+    // Permutation table lookup: wraps index to [0,255] via bit mask.
+    const permAt = struct {
+        inline fn f(d: *const [257]u8, idx: c_int) u8 {
+            return d[@intCast(idx & 0xFF)];
+        }
+    }.f;
+
+    // Skew input space to determine simplex cell origin
+    const hf = (x + y) * SKEW;
+    const hx: c_int = @intFromFloat(@floor(x + hf));
+    const hz: c_int = @intFromFloat(@floor(y + hf));
+
+    // Unskew back to get distance from cell origin
+    const mhxz: f64 = @as(f64, @floatFromInt(hx + hz)) * UNSKEW;
+    const x0 = x - (@as(f64, @floatFromInt(hx)) - mhxz);
+    const y0 = y - (@as(f64, @floatFromInt(hz)) - mhxz);
+
+    // Determine which simplex triangle we're in
+    const offx: c_int = @intFromBool(x0 > y0);
+    const offz: c_int = @intFromBool(x0 <= y0);
+
+    // Offsets for second and third corners in unskewed coords
+    const x1 = (x0 - @as(f64, @floatFromInt(offx))) + UNSKEW;
+    const y1 = (y0 - @as(f64, @floatFromInt(offz))) + UNSKEW;
+    const x2 = (x0 - 1.0) + (2.0 * UNSKEW);
+    const y2 = (y0 - 1.0) + (2.0 * UNSKEW);
+
+    // Hash coordinates to gradient indices via permutation table
+    const d = &noise.*.d;
+    const gi0: c_int = permAt(d, @as(c_int, permAt(d, hz)) + hx);
+    const gi1: c_int = permAt(d, @as(c_int, permAt(d, hz + offz)) + hx + offx);
+    const gi2: c_int = permAt(d, @as(c_int, permAt(d, hz + 1)) + hx + 1);
+
+    // Sum gradient contributions from the three corners
+    return 70.0 * (simplexGrad(@rem(gi0, 12), x0, y0, 0.0, 0.5) +
+        simplexGrad(@rem(gi1, 12), x1, y1, 0.0, 0.5) +
+        simplexGrad(@rem(gi2, 12), x2, y2, 0.0, 0.5));
 }
 /// Initialize a multi-octave Perlin noise generator (Java LCG).
 /// omin is the starting octave (negative = higher frequency), len is the count.
@@ -909,22 +903,11 @@ pub fn samplePerlinBeta17Terrain(arg_noise: [*c]const PerlinNoise, arg_v: [*c]f6
         }
     }
 }
-pub fn simplexGrad(arg_idx: c_int, arg_x: f64, arg_y: f64, arg_z: f64, arg_d: f64) f64 {
-    var idx = arg_idx;
-    _ = &idx;
-    var x = arg_x;
-    _ = &x;
-    var y = arg_y;
-    _ = &y;
-    var z = arg_z;
-    _ = &z;
-    var d = arg_d;
-    _ = &d;
-    var con: f64 = ((d - (x * x)) - (y * y)) - (z * z);
-    _ = &con;
+pub fn simplexGrad(idx: c_int, x: f64, y: f64, z: f64, d: f64) f64 {
+    const con = d - (x * x) - (y * y) - (z * z);
     if (con < 0.0) return 0;
-    con *= con;
-    return (con * con) * indexedLerp(@as(u8, @bitCast(@as(i8, @truncate(idx)))), x, y, z);
+    const con2 = con * con;
+    return (con2 * con2) * indexedLerp(@as(u8, @truncate(@as(u32, @bitCast(idx)))), x, y, z);
 }
 pub const MC_B1_7: c_int = 1;
 pub const MC_B1_8: c_int = 2;
