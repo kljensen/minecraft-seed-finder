@@ -1589,6 +1589,60 @@ fn combinedBiomeThreshold(
     return all_matched;
 }
 
+fn biomeThresholdMatched(g: *c.Generator, anchor: c.Pos, req: BiomeReq) bool {
+    if (req.points.len > 0) {
+        return biomeMatchesPointsWithBounds(g, req.biome_id, req.min_count, req.points, req.climate_bounds);
+    }
+
+    const stride = selectBiomeMatchStride(req.min_count);
+    const offsets = switch (stride) {
+        4 => if (req.coarse_offsets_4.len > 0) req.coarse_offsets_4 else req.offsets,
+        2 => if (req.coarse_offsets_2.len > 0) req.coarse_offsets_2 else req.offsets,
+        else => req.offsets,
+    };
+
+    // Multi-phase coarse scan: try progressively finer grids.
+    // Each phase either accepts (>= min_count), rejects (0),
+    // or is uncertain (0 < n < min_count) and falls through.
+    if (stride == 1 and req.min_count > 1) {
+        // Phase 1: stride=4 (coarsest, ~1/4 the points of stride=2)
+        if (req.coarse_offsets_4.len > 0 and
+            req.coarse_offsets_4.len < req.offsets.len)
+        {
+            const coarse4_count = countBiomeMatchesWithBounds(
+                g,
+                anchor,
+                req.biome_id,
+                req.min_count,
+                req.coarse_offsets_4,
+                req.climate_bounds,
+            );
+            if (coarse4_count >= req.min_count) return true;
+            if (coarse4_count == 0) return false;
+            // Uncertain: try stride=2
+        }
+
+        // Phase 2: stride=2
+        if (req.coarse_offsets_2.len > 0 and
+            req.coarse_offsets_2.len < req.offsets.len)
+        {
+            const coarse2_count = countBiomeMatchesWithBounds(
+                g,
+                anchor,
+                req.biome_id,
+                req.min_count,
+                req.coarse_offsets_2,
+                req.climate_bounds,
+            );
+            if (coarse2_count >= req.min_count) return true;
+            if (coarse2_count == 0) return false;
+            // Uncertain: fall through to full-resolution scan
+        }
+    }
+
+    return biomeMatchesWithinRadiusWithBounds(g, anchor, req.biome_id, req.min_count, offsets, req.climate_bounds);
+}
+
 pub fn evalConstraintAt(
     constraints: []const Constraint,
     aliases: []const usize,
@@ -1628,54 +1682,7 @@ pub fn evalConstraintAt(
                 if (evals[idx].matched) evals[idx].best_dist2 = result.best_dist2;
                 evals[idx].finalized = true;
             } else {
-                const matched = if (req.points.len > 0)
-                    biomeMatchesPointsWithBounds(g, req.biome_id, req.min_count, req.points, req.climate_bounds)
-                else blk: {
-                    const stride = selectBiomeMatchStride(req.min_count);
-                    const offsets = switch (stride) {
-                        4 => if (req.coarse_offsets_4.len > 0) req.coarse_offsets_4 else req.offsets,
-                        2 => if (req.coarse_offsets_2.len > 0) req.coarse_offsets_2 else req.offsets,
-                        else => req.offsets,
-                    };
-                    // Multi-phase coarse scan: try progressively finer grids.
-                    // Each phase either accepts (>= min_count), rejects (0),
-                    // or is uncertain (0 < n < min_count) and falls through.
-                    if (stride == 1 and req.min_count > 1) {
-                        // Phase 1: stride=4 (coarsest, ~1/4 the points of stride=2)
-                        if (req.coarse_offsets_4.len > 0 and
-                            req.coarse_offsets_4.len < req.offsets.len)
-                        {
-                            const coarse4_count = countBiomeMatchesWithBounds(
-                                g,
-                                anchor,
-                                req.biome_id,
-                                req.min_count,
-                                req.coarse_offsets_4,
-                                req.climate_bounds,
-                            );
-                            if (coarse4_count >= req.min_count) break :blk true;
-                            if (coarse4_count == 0) break :blk false;
-                            // Uncertain: try stride=2
-                        }
-                        // Phase 2: stride=2
-                        if (req.coarse_offsets_2.len > 0 and
-                            req.coarse_offsets_2.len < req.offsets.len)
-                        {
-                            const coarse2_count = countBiomeMatchesWithBounds(
-                                g,
-                                anchor,
-                                req.biome_id,
-                                req.min_count,
-                                req.coarse_offsets_2,
-                                req.climate_bounds,
-                            );
-                            if (coarse2_count >= req.min_count) break :blk true;
-                            if (coarse2_count == 0) break :blk false;
-                            // Uncertain: fall through to full-resolution scan
-                        }
-                    }
-                    break :blk biomeMatchesWithinRadiusWithBounds(g, anchor, req.biome_id, req.min_count, offsets, req.climate_bounds);
-                };
+                const matched = biomeThresholdMatched(g, anchor, req);
                 evals[idx].matched = matched;
                 evals[idx].count = if (matched) req.min_count else 0;
                 evals[idx].best_dist2 = std.math.maxInt(i64);
