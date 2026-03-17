@@ -34,8 +34,12 @@ Requires [Zig](https://ziglang.org/) 0.14.0+.
 zig build -Doptimize=ReleaseFast
 ```
 
-Find flower forest + meadow near spawn with jagged peaks, lush caves, and a
-deep dark nearby, plus a village:
+Find [flower forest](https://minecraft.wiki/w/Flower_Forest) +
+[meadow](https://minecraft.wiki/w/Meadow) near spawn with
+[jagged peaks](https://minecraft.wiki/w/Jagged_Peaks),
+[lush caves](https://minecraft.wiki/w/Lush_Caves), and a
+[deep dark](https://minecraft.wiki/w/Deep_Dark) nearby, plus a
+[village](https://minecraft.wiki/w/Village):
 
 ```sh
 zig build run -Doptimize=ReleaseFast -- \
@@ -54,7 +58,7 @@ zig build run -Doptimize=ReleaseFast -- \
 All examples use Bedrock edition (the default), MC 1.21.1, random seed sampling.
 Results vary each run — these are real seeds from one run of each command.
 
-**Cherry grove with a village and outpost nearby** (~4 s single-thread)
+**[Cherry grove](https://minecraft.wiki/w/Cherry_Grove) with a [village](https://minecraft.wiki/w/Village) and [outpost](https://minecraft.wiki/w/Pillager_Outpost) nearby** (~4 s single-thread)
 
 ```sh
 seed-finder --version 1.21.1 --random --count 5 \
@@ -69,7 +73,7 @@ seed=-317 9391 2252 5228 0958 spawn=(16,0)    cherry_grove@159  village@305  out
 seed=-910 4215 7108 1848 7959 spawn=(-16,16)  cherry_grove@64   village@329  outpost@575
 ```
 
-**Eroded badlands with a desert pyramid and village** (~1 s single-thread)
+**[Eroded badlands](https://minecraft.wiki/w/Badlands#Eroded_Badlands) with a [desert pyramid](https://minecraft.wiki/w/Desert_Pyramid) and [village](https://minecraft.wiki/w/Village)** (~1 s single-thread)
 
 ```sh
 seed-finder --version 1.21.1 --random --count 5 \
@@ -84,7 +88,7 @@ seed=103 3528 9898 9757 7741  spawn=(-48,0)  eroded_badlands@179  village@204  d
 seed=502 1688 5111 1532 0908  spawn=(0,0)    eroded_badlands@46   village@283  desert_pyramid@402
 ```
 
-**Jagged peaks with a village and outpost** (~10 s with `--threads auto`)
+**[Jagged peaks](https://minecraft.wiki/w/Jagged_Peaks) with a [village](https://minecraft.wiki/w/Village) and [outpost](https://minecraft.wiki/w/Pillager_Outpost)** (~10 s with `--threads auto`)
 
 ```sh
 seed-finder --version 1.21.1 --random --count 5 --threads auto \
@@ -177,8 +181,22 @@ zig build run -- --count 10 --max-seed 50000000 \
 
 ## Supported structures
 
-`ancient_city` · `desert_pyramid` · `igloo` · `jungle_pyramid` · `mansion` · `monument` ·
-`ocean_ruin` · `outpost` · `ruined_portal` · `shipwreck` · `swamp_hut` · `treasure` · `village`
+[`ancient_city`](https://minecraft.wiki/w/Ancient_City) ·
+[`desert_pyramid`](https://minecraft.wiki/w/Desert_Pyramid) ·
+[`igloo`](https://minecraft.wiki/w/Igloo) ·
+[`jungle_pyramid`](https://minecraft.wiki/w/Jungle_Pyramid) ·
+[`mansion`](https://minecraft.wiki/w/Woodland_Mansion) ·
+[`monument`](https://minecraft.wiki/w/Ocean_Monument) ·
+[`ocean_ruin`](https://minecraft.wiki/w/Ocean_Ruins) ·
+[`outpost`](https://minecraft.wiki/w/Pillager_Outpost) ·
+[`ruined_portal`](https://minecraft.wiki/w/Ruined_Portal) ·
+[`shipwreck`](https://minecraft.wiki/w/Shipwreck) ·
+[`swamp_hut`](https://minecraft.wiki/w/Swamp_Hut) ·
+[`treasure`](https://minecraft.wiki/w/Buried_Treasure) ·
+[`village`](https://minecraft.wiki/w/Village)
+
+All [biomes](https://minecraft.wiki/w/Biome) from MC 1.18–1.21.1 are supported.
+Run `--list-biomes` to see the full list.
 
 ## Testing
 
