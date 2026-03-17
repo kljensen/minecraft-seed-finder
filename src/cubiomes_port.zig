@@ -24,30 +24,14 @@ pub const @"i64" = i64;
 pub const @"u64" = u64;
 pub const @"f32" = f32;
 pub const @"f64" = f64;
-pub inline fn rotl64(arg_x: u64, arg_b: u8) u64 {
-    var x = arg_x;
-    _ = &x;
-    var b = arg_b;
-    _ = &b;
-    return (x << @intCast(@as(c_int, @bitCast(@as(c_uint, b))))) | (x >> @intCast(@as(c_int, 64) - @as(c_int, @bitCast(@as(c_uint, b)))));
+pub inline fn rotl64(x: u64, b: u8) u64 {
+    return @import("std").math.rotl(u64, x, b);
 }
-pub inline fn rotr32(arg_a: u32, arg_b: u8) u32 {
-    var a = arg_a;
-    _ = &a;
-    var b = arg_b;
-    _ = &b;
-    return (a >> @intCast(@as(c_int, @bitCast(@as(c_uint, b))))) | (a << @intCast(@as(c_int, 32) - @as(c_int, @bitCast(@as(c_uint, b)))));
+pub inline fn rotr32(a: u32, b: u8) u32 {
+    return @import("std").math.rotr(u32, a, b);
 }
-pub inline fn floordiv(arg_a: i32, arg_b: i32) i32 {
-    var a = arg_a;
-    _ = &a;
-    var b = arg_b;
-    _ = &b;
-    var q: i32 = @divTrunc(a, b);
-    _ = &q;
-    var r: i32 = @import("std").zig.c_translation.signedRemainder(a, b);
-    _ = &r;
-    return q - @intFromBool(((a ^ b) < @as(c_int, 0)) and !!(r != 0));
+pub inline fn floordiv(a: i32, b: i32) i32 {
+    return @divFloor(a, b);
 }
 // ---------------------------------------------------------------------------
 // Java LCG random number generator
