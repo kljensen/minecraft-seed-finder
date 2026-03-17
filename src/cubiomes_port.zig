@@ -322,8 +322,8 @@ pub fn clampedLerp(arg_part: f64, arg_from: f64, arg_to: f64) f64 {
     _ = &from;
     var to = arg_to;
     _ = &to;
-    if (part <= @as(f64, @floatFromInt(@as(c_int, 0)))) return from;
-    if (part >= @as(f64, @floatFromInt(@as(c_int, 1)))) return to;
+    if (part <= 0.0) return from;
+    if (part >= 1.0) return to;
     return lerp(part, from, to);
 }
 pub inline fn cos(__x: f64) f64 { return @cos(__x); }
@@ -604,19 +604,19 @@ pub fn samplePerlin(arg_noise: [*c]const PerlinNoise, arg_d1: f64, arg_d2: f64, 
     _ = &v7;
     var l1: f64 = indexedLerp(v4.a, d1, d2, d3);
     _ = &l1;
-    var l5: f64 = indexedLerp(v4.b, d1, d2, d3 - @as(f64, @floatFromInt(@as(c_int, 1))));
+    var l5: f64 = indexedLerp(v4.b, d1, d2, d3 - 1.0);
     _ = &l5;
-    var l2: f64 = indexedLerp(v6.a, d1 - @as(f64, @floatFromInt(@as(c_int, 1))), d2, d3);
+    var l2: f64 = indexedLerp(v6.a, d1 - 1.0, d2, d3);
     _ = &l2;
-    var l6: f64 = indexedLerp(v6.b, d1 - @as(f64, @floatFromInt(@as(c_int, 1))), d2, d3 - @as(f64, @floatFromInt(@as(c_int, 1))));
+    var l6: f64 = indexedLerp(v6.b, d1 - 1.0, d2, d3 - 1.0);
     _ = &l6;
-    var l3: f64 = indexedLerp(v5.a, d1, d2 - @as(f64, @floatFromInt(@as(c_int, 1))), d3);
+    var l3: f64 = indexedLerp(v5.a, d1, d2 - 1.0, d3);
     _ = &l3;
-    var l7: f64 = indexedLerp(v5.b, d1, d2 - @as(f64, @floatFromInt(@as(c_int, 1))), d3 - @as(f64, @floatFromInt(@as(c_int, 1))));
+    var l7: f64 = indexedLerp(v5.b, d1, d2 - 1.0, d3 - 1.0);
     _ = &l7;
-    var l4: f64 = indexedLerp(v7.a, d1 - @as(f64, @floatFromInt(@as(c_int, 1))), d2 - @as(f64, @floatFromInt(@as(c_int, 1))), d3);
+    var l4: f64 = indexedLerp(v7.a, d1 - 1.0, d2 - 1.0, d3);
     _ = &l4;
-    var l8: f64 = indexedLerp(v7.b, d1 - @as(f64, @floatFromInt(@as(c_int, 1))), d2 - @as(f64, @floatFromInt(@as(c_int, 1))), d3 - @as(f64, @floatFromInt(@as(c_int, 1))));
+    var l8: f64 = indexedLerp(v7.b, d1 - 1.0, d2 - 1.0, d3 - 1.0);
     _ = &l8;
     l1 = lerp(t1, l1, l2);
     l3 = lerp(t1, l3, l4);
@@ -633,9 +633,9 @@ pub fn sampleSimplex2D(arg_noise: [*c]const PerlinNoise, arg_x: f64, arg_y: f64)
     _ = &x;
     var y = arg_y;
     _ = &y;
-    const SKEW: f64 = 0.5 * (sqrt(@as(f64, @floatFromInt(@as(c_int, 3)))) - 1.0);
+    const SKEW: f64 = 0.5 * (sqrt(3.0) - 1.0);
     _ = &SKEW;
-    const UNSKEW: f64 = (3.0 - sqrt(@as(f64, @floatFromInt(@as(c_int, 3))))) / 6.0;
+    const UNSKEW: f64 = (3.0 - sqrt(3.0)) / 6.0;
     _ = &UNSKEW;
     var hf: f64 = (x + y) * SKEW;
     _ = &hf;
@@ -848,16 +848,16 @@ pub fn xOctaveInit(arg_noise: [*c]OctaveNoise, arg_xr: [*c]Xoroshiro, arg_octave
             1,
             0.5,
             0.25,
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 8))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 16))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 32))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 128))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 256))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 512))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 1024))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 2048))),
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 4096))),
+            1.0 / 8.0,
+            1.0 / 16.0,
+            1.0 / 32.0,
+            1.0 / 64.0,
+            1.0 / 128.0,
+            1.0 / 256.0,
+            1.0 / 512.0,
+            1.0 / 1024.0,
+            1.0 / 2048.0,
+            1.0 / 4096.0,
         };
     };
     _ = &lacuna_ini;
@@ -865,14 +865,14 @@ pub fn xOctaveInit(arg_noise: [*c]OctaveNoise, arg_xr: [*c]Xoroshiro, arg_octave
         const static: [10]f64 = [10]f64{
             0,
             1,
-            2.0 / @as(f64, @floatFromInt(@as(c_int, 3))),
-            4.0 / @as(f64, @floatFromInt(@as(c_int, 7))),
-            8.0 / @as(f64, @floatFromInt(@as(c_int, 15))),
-            16.0 / @as(f64, @floatFromInt(@as(c_int, 31))),
-            32.0 / @as(f64, @floatFromInt(@as(c_int, 63))),
-            64.0 / @as(f64, @floatFromInt(@as(c_int, 127))),
-            128.0 / @as(f64, @floatFromInt(@as(c_int, 255))),
-            256.0 / @as(f64, @floatFromInt(@as(c_int, 511))),
+            2.0 / 3.0,
+            4.0 / 7.0,
+            8.0 / 15.0,
+            16.0 / 31.0,
+            32.0 / 63.0,
+            64.0 / 127.0,
+            128.0 / 255.0,
+            256.0 / 511.0,
         };
     };
     _ = &persist_ini;
@@ -906,7 +906,7 @@ pub fn xOctaveInit(arg_noise: [*c]OctaveNoise, arg_xr: [*c]Xoroshiro, arg_octave
         if ((blk: {
             const tmp = i;
             if (tmp >= 0) break :blk amplitudes + @as(usize, @intCast(tmp)) else break :blk amplitudes - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).* == @as(f64, @floatFromInt(@as(c_int, 0)))) continue;
+        }).* == 0.0) continue;
         var pxr: Xoroshiro = undefined;
         _ = &pxr;
         pxr.lo = xlo ^ md5_octave_n.static[@as(c_uint, @intCast((@as(c_int, 12) + omin) + i))][@as(c_uint, @intCast(@as(c_int, 0)))];
@@ -958,7 +958,7 @@ pub fn sampleOctave(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64, ar
             _ = &ay;
             var az: f64 = maintainPrecision(z * lf);
             _ = &az;
-            var pv: f64 = samplePerlin(p, ax, ay, az, @as(f64, @floatFromInt(@as(c_int, 0))), @as(f64, @floatFromInt(@as(c_int, 0))));
+            var pv: f64 = samplePerlin(p, ax, ay, az, 0.0, 0.0);
             _ = &pv;
             v += p.*.amplitude * pv;
         }
@@ -1133,15 +1133,15 @@ pub fn xDoublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_xr: [*c]Xoroshiro
     const amp_ini = struct {
         const static: [10]f64 = [10]f64{
             0,
-            5.0 / @as(f64, @floatFromInt(@as(c_int, 6))),
-            10.0 / @as(f64, @floatFromInt(@as(c_int, 9))),
-            15.0 / @as(f64, @floatFromInt(@as(c_int, 12))),
-            20.0 / @as(f64, @floatFromInt(@as(c_int, 15))),
-            25.0 / @as(f64, @floatFromInt(@as(c_int, 18))),
-            30.0 / @as(f64, @floatFromInt(@as(c_int, 21))),
-            35.0 / @as(f64, @floatFromInt(@as(c_int, 24))),
-            40.0 / @as(f64, @floatFromInt(@as(c_int, 27))),
-            45.0 / @as(f64, @floatFromInt(@as(c_int, 30))),
+            5.0 / 6.0,
+            10.0 / 9.0,
+            15.0 / 12.0,
+            20.0 / 15.0,
+            25.0 / 18.0,
+            30.0 / 21.0,
+            35.0 / 24.0,
+            40.0 / 27.0,
+            45.0 / 30.0,
         };
     };
     _ = &amp_ini;
@@ -1312,37 +1312,37 @@ pub fn samplePerlinBeta17Terrain(arg_noise: [*c]const PerlinNoise, arg_v: [*c]f6
                 var l2: f64 = indexedLerp((blk: {
                     const tmp = b2;
                     if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-                }).*, d1 - @as(f64, @floatFromInt(@as(c_int, 1))), d2, d3);
+                }).*, d1 - 1.0, d2, d3);
                 _ = &l2;
                 var m3: f64 = indexedLerp((blk: {
                     const tmp = a3;
                     if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-                }).*, d1, d2 - @as(f64, @floatFromInt(@as(c_int, 1))), d3);
+                }).*, d1, d2 - 1.0, d3);
                 _ = &m3;
                 var l4: f64 = indexedLerp((blk: {
                     const tmp = b3;
                     if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-                }).*, d1 - @as(f64, @floatFromInt(@as(c_int, 1))), d2 - @as(f64, @floatFromInt(@as(c_int, 1))), d3);
+                }).*, d1 - 1.0, d2 - 1.0, d3);
                 _ = &l4;
                 var m5: f64 = indexedLerp((blk: {
                     const tmp = a2 + @as(c_int, 1);
                     if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-                }).*, d1, d2, d3 - @as(f64, @floatFromInt(@as(c_int, 1))));
+                }).*, d1, d2, d3 - 1.0);
                 _ = &m5;
                 var l6: f64 = indexedLerp((blk: {
                     const tmp = b2 + @as(c_int, 1);
                     if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-                }).*, d1 - @as(f64, @floatFromInt(@as(c_int, 1))), d2, d3 - @as(f64, @floatFromInt(@as(c_int, 1))));
+                }).*, d1 - 1.0, d2, d3 - 1.0);
                 _ = &l6;
                 var m7: f64 = indexedLerp((blk: {
                     const tmp = a3 + @as(c_int, 1);
                     if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-                }).*, d1, d2 - @as(f64, @floatFromInt(@as(c_int, 1))), d3 - @as(f64, @floatFromInt(@as(c_int, 1))));
+                }).*, d1, d2 - 1.0, d3 - 1.0);
                 _ = &m7;
                 var l8: f64 = indexedLerp((blk: {
                     const tmp = b3 + @as(c_int, 1);
                     if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-                }).*, d1 - @as(f64, @floatFromInt(@as(c_int, 1))), d2 - @as(f64, @floatFromInt(@as(c_int, 1))), d3 - @as(f64, @floatFromInt(@as(c_int, 1))));
+                }).*, d1 - 1.0, d2 - 1.0, d3 - 1.0);
                 _ = &l8;
                 l1 = lerp(t1, m1, l2);
                 l3 = lerp(t1, m3, l4);
@@ -1375,7 +1375,7 @@ pub fn simplexGrad(arg_idx: c_int, arg_x: f64, arg_y: f64, arg_z: f64, arg_d: f6
     _ = &d;
     var con: f64 = ((d - (x * x)) - (y * y)) - (z * z);
     _ = &con;
-    if (con < @as(f64, @floatFromInt(@as(c_int, 0)))) return 0;
+    if (con < 0.0) return 0;
     con *= con;
     return (con * con) * indexedLerp(@as(u8, @bitCast(@as(i8, @truncate(idx)))), x, y, z);
 }
@@ -2515,8 +2515,8 @@ pub fn sampleSurfaceNoiseBetween(arg_sn: [*c]const SurfaceNoise, arg_x: c_int, a
                 const tmp = i;
                 if (tmp >= 0) break :blk sn.*.octmain.octaves + @as(usize, @intCast(tmp)) else break :blk sn.*.octmain.octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
             }).*, dx, dy, dz, sy, dy) * amp;
-            if ((vmain - amp) > @as(f64, @floatFromInt(@as(c_int, 1)))) return vmax;
-            if ((vmain + amp) < @as(f64, @floatFromInt(@as(c_int, 0)))) return vmin;
+            if ((vmain - amp) > 1.0) return vmax;
+            if ((vmain + amp) < 0.0) return vmin;
             amp *= 0.5;
             persist *= 2.0;
         }
@@ -2641,7 +2641,7 @@ pub fn mapNether3D(arg_nn: [*c]const NetherNoise, arg_out: [*c]c_int, arg_r: Ran
     var scale: c_int = @divTrunc(r.scale, @as(c_int, 4));
     _ = &scale;
     _ = memset(@as(?*anyopaque, @ptrCast(out)), @as(c_int, 0), ((@sizeOf(c_int) *% @as(c_ulong, @bitCast(@as(c_long, r.sx)))) *% @as(c_ulong, @bitCast(@as(c_long, r.sy)))) *% @as(c_ulong, @bitCast(@as(c_long, r.sz))));
-    var invgrad: f32 = @as(f32, @floatCast((1.0 / ((@as(f64, @floatCast(confidence)) * 0.05) * @as(f64, @floatFromInt(@as(c_int, 2))))) / @as(f64, @floatFromInt(scale))));
+    var invgrad: f32 = @as(f32, @floatCast((1.0 / ((@as(f64, @floatCast(confidence)) * 0.05) * 2.0)) / @as(f64, @floatFromInt(scale))));
     _ = &invgrad;
     {
         k = 0;
@@ -2973,7 +2973,7 @@ pub fn mapEndSurfaceHeight(arg_y: [*c]f32, arg_en: [*c]const EndNoise, arg_sn: [
     _ = &y1_2;
     var yn_3: c_int = (y1_2 - y0_1) + @as(c_int, 1);
     _ = &yn_3;
-    var cellmid: f64 = if (scale > @as(c_int, 1)) @as(f64, @floatFromInt(scale)) / 16.0 else @as(f64, @floatFromInt(@as(c_int, 0)));
+    var cellmid: f64 = if (scale > @as(c_int, 1)) @as(f64, @floatFromInt(scale)) / 16.0 else 0.0;
     _ = &cellmid;
     var cellsiz: c_int = @divTrunc(@as(c_int, 8), scale);
     _ = &cellsiz;
@@ -3266,9 +3266,9 @@ pub fn setBetaBiomeSeed(arg_bnb: [*c]BiomeNoiseBeta, arg_seed: u64) void {
     setSeed(&seedScratch, seed *% @as(u64, @bitCast(@as(c_long, @as(c_int, 9871)))));
     octaveInitBeta(@as([*c]OctaveNoise, @ptrCast(@alignCast(&bnb.*.climate))), &seedScratch, @as([*c]PerlinNoise, @ptrCast(@alignCast(&bnb.*.oct))), @as(c_int, 4), 0.025 / 1.5, 0.25, 0.55, 2.0);
     setSeed(&seedScratch, seed *% @as(u64, @bitCast(@as(c_long, @as(c_int, 39811)))));
-    octaveInitBeta(@as([*c]OctaveNoise, @ptrCast(@alignCast(&bnb.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 1))))), &seedScratch, @as([*c]PerlinNoise, @ptrCast(@alignCast(&bnb.*.oct))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 4))))), @as(c_int, 4), 0.05 / 1.5, 1.0 / @as(f64, @floatFromInt(@as(c_int, 3))), 0.55, 2.0);
+    octaveInitBeta(@as([*c]OctaveNoise, @ptrCast(@alignCast(&bnb.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 1))))), &seedScratch, @as([*c]PerlinNoise, @ptrCast(@alignCast(&bnb.*.oct))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 4))))), @as(c_int, 4), 0.05 / 1.5, 1.0 / 3.0, 0.55, 2.0);
     setSeed(&seedScratch, seed *% @as(u64, @bitCast(@as(c_long, 543321))));
-    octaveInitBeta(@as([*c]OctaveNoise, @ptrCast(@alignCast(&bnb.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 2))))), &seedScratch, @as([*c]PerlinNoise, @ptrCast(@alignCast(&bnb.*.oct))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 8))))), @as(c_int, 2), 0.25 / 1.5, 10.0 / @as(f64, @floatFromInt(@as(c_int, 17))), 0.55, 2.0);
+    octaveInitBeta(@as([*c]OctaveNoise, @ptrCast(@alignCast(&bnb.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 2))))), &seedScratch, @as([*c]PerlinNoise, @ptrCast(@alignCast(&bnb.*.oct))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 8))))), @as(c_int, 2), 0.25 / 1.5, 10.0 / 17.0, 0.55, 2.0);
     bnb.*.nptype = -@as(c_int, 1);
 }
 pub fn sampleBiomeNoise(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_dat: [*c]u64, arg_sample_flags: u32) c_int {
@@ -3311,12 +3311,12 @@ pub fn sampleBiomeNoise(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: c_
     var pz: f64 = @as(f64, @floatFromInt(z));
     _ = &pz;
     if (!((sample_flags & @as(u32, @bitCast(SAMPLE_NO_SHIFT))) != 0)) {
-        px += sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_SHIFT))], @as(f64, @floatFromInt(x)), @as(f64, @floatFromInt(@as(c_int, 0))), @as(f64, @floatFromInt(z))) * 4.0;
-        pz += sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_SHIFT))], @as(f64, @floatFromInt(z)), @as(f64, @floatFromInt(x)), @as(f64, @floatFromInt(@as(c_int, 0)))) * 4.0;
+        px += sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_SHIFT))], @as(f64, @floatFromInt(x)), 0.0, @as(f64, @floatFromInt(z))) * 4.0;
+        pz += sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_SHIFT))], @as(f64, @floatFromInt(z)), @as(f64, @floatFromInt(x)), 0.0) * 4.0;
     }
-    c = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_CONTINENTALNESS))], px, @as(f64, @floatFromInt(@as(c_int, 0))), pz)));
-    e = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_EROSION))], px, @as(f64, @floatFromInt(@as(c_int, 0))), pz)));
-    w = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_WEIRDNESS))], px, @as(f64, @floatFromInt(@as(c_int, 0))), pz)));
+    c = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_CONTINENTALNESS))], px, 0.0, pz)));
+    e = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_EROSION))], px, 0.0, pz)));
+    w = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_WEIRDNESS))], px, 0.0, pz)));
     if (!((sample_flags & @as(u32, @bitCast(SAMPLE_NO_DEPTH))) != 0)) {
         var np_param: [4]f32 = [4]f32{
             c,
@@ -3329,8 +3329,8 @@ pub fn sampleBiomeNoise(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: c_
         _ = &off;
         d = @as(f32, @floatCast(((1.0 - (@as(f64, @floatFromInt(y * @as(c_int, 4))) / 128.0)) - (83.0 / 160.0)) + off));
     }
-    t = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_TEMPERATURE))], px, @as(f64, @floatFromInt(@as(c_int, 0))), pz)));
-    h = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_HUMIDITY))], px, @as(f64, @floatFromInt(@as(c_int, 0))), pz)));
+    t = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_TEMPERATURE))], px, 0.0, pz)));
+    h = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_HUMIDITY))], px, 0.0, pz)));
     var l_np: [6]i64 = undefined;
     _ = &l_np;
     var p_np: [*c]i64 = if (np != null) np else @as([*c]i64, @ptrCast(@alignCast(&l_np)));
@@ -3370,13 +3370,13 @@ pub fn sampleBiomeNoiseBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_np: [*c]i64, 
     _ = &f;
     f = (sampleOctaveBeta17Biome(&bnb.*.climate[@as(c_uint, @intCast(@as(c_int, 2)))], @as(f64, @floatFromInt(x)), @as(f64, @floatFromInt(z))) * 1.1) + 0.5;
     t = (((sampleOctaveBeta17Biome(&bnb.*.climate[@as(c_uint, @intCast(@as(c_int, 0)))], @as(f64, @floatFromInt(x)), @as(f64, @floatFromInt(z))) * 0.15) + 0.7) * 0.99) + (f * 0.01);
-    t = @as(f64, @floatFromInt(@as(c_int, 1))) - ((@as(f64, @floatFromInt(@as(c_int, 1))) - t) * (@as(f64, @floatFromInt(@as(c_int, 1))) - t));
-    t = if (t < @as(f64, @floatFromInt(@as(c_int, 0)))) @as(f64, @floatFromInt(@as(c_int, 0))) else t;
-    t = if (t > @as(f64, @floatFromInt(@as(c_int, 1)))) @as(f64, @floatFromInt(@as(c_int, 1))) else t;
+    t = 1.0 - ((1.0 - t) * (1.0 - t));
+    t = if (t < 0.0) 0.0 else t;
+    t = if (t > 1.0) 1.0 else t;
     if (bnb.*.nptype == NP_TEMPERATURE) return @as(c_int, @bitCast(@as(c_int, @truncate(@as(i64, @intFromFloat(@as(f64, @floatCast(10000.0)) * t))))));
     h = (((sampleOctaveBeta17Biome(&bnb.*.climate[@as(c_uint, @intCast(@as(c_int, 1)))], @as(f64, @floatFromInt(x)), @as(f64, @floatFromInt(z))) * 0.15) + 0.5) * 0.998) + (f * 0.002);
-    h = if (h < @as(f64, @floatFromInt(@as(c_int, 0)))) @as(f64, @floatFromInt(@as(c_int, 0))) else h;
-    h = if (h > @as(f64, @floatFromInt(@as(c_int, 1)))) @as(f64, @floatFromInt(@as(c_int, 1))) else h;
+    h = if (h < 0.0) 0.0 else h;
+    h = if (h > 1.0) 1.0 else h;
     if (bnb.*.nptype == NP_HUMIDITY) return @as(c_int, @bitCast(@as(c_int, @truncate(@as(i64, @intFromFloat((@as(f64, @floatCast(10000.0)) * h) * t))))));
     if (nv != null) {
         nv[@as(c_uint, @intCast(@as(c_int, 0)))] = t;
@@ -3400,9 +3400,9 @@ pub fn approxSurfaceBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]const S
     _ = &cols;
     var colNoise: SeaLevelColumnNoiseBeta = undefined;
     _ = &colNoise;
-    genColumnNoise(snb, &colNoise, @as(f64, @floatFromInt(x)) * 0.25, @as(f64, @floatFromInt(z)) * 0.25, @as(f64, @floatFromInt(@as(c_int, 0))));
+    genColumnNoise(snb, &colNoise, @as(f64, @floatFromInt(x)) * 0.25, @as(f64, @floatFromInt(z)) * 0.25, 0.0);
     processColumnNoise(@as([*c]f64, @ptrCast(@alignCast(&cols))), &colNoise, @as([*c]f64, @ptrCast(@alignCast(&climate))));
-    return @as(f64, @floatFromInt(@as(c_int, 63))) + (((cols[@as(c_uint, @intCast(@as(c_int, 0)))] * 0.125) + (cols[@as(c_uint, @intCast(@as(c_int, 1)))] * 0.875)) * 0.5);
+    return 63.0 + (((cols[@as(c_uint, @intCast(@as(c_int, 0)))] * 0.125) + (cols[@as(c_uint, @intCast(@as(c_int, 1)))] * 0.875)) * 0.5);
 }
 pub fn getOldBetaBiome(arg_t: f32, arg_h: f32) c_int {
     var t = arg_t;
@@ -7631,9 +7631,9 @@ pub fn sampleClimatePara(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: f
         _ = &e;
         var w: f32 = undefined;
         _ = &w;
-        c = @as(f32, @floatCast(sampleDoublePerlin(@as([*c]const DoublePerlinNoise, @ptrCast(@alignCast(&bn.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(NP_CONTINENTALNESS)))), x, @as(f64, @floatFromInt(@as(c_int, 0))), z)));
-        e = @as(f32, @floatCast(sampleDoublePerlin(@as([*c]const DoublePerlinNoise, @ptrCast(@alignCast(&bn.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(NP_EROSION)))), x, @as(f64, @floatFromInt(@as(c_int, 0))), z)));
-        w = @as(f32, @floatCast(sampleDoublePerlin(@as([*c]const DoublePerlinNoise, @ptrCast(@alignCast(&bn.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(NP_WEIRDNESS)))), x, @as(f64, @floatFromInt(@as(c_int, 0))), z)));
+        c = @as(f32, @floatCast(sampleDoublePerlin(@as([*c]const DoublePerlinNoise, @ptrCast(@alignCast(&bn.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(NP_CONTINENTALNESS)))), x, 0.0, z)));
+        e = @as(f32, @floatCast(sampleDoublePerlin(@as([*c]const DoublePerlinNoise, @ptrCast(@alignCast(&bn.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(NP_EROSION)))), x, 0.0, z)));
+        w = @as(f32, @floatCast(sampleDoublePerlin(@as([*c]const DoublePerlinNoise, @ptrCast(@alignCast(&bn.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(NP_WEIRDNESS)))), x, 0.0, z)));
         var np_param: [4]f32 = [4]f32{
             c,
             e,
@@ -7655,7 +7655,7 @@ pub fn sampleClimatePara(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: f
         }
         return @as(f64, @floatCast(d));
     }
-    var p: f64 = sampleDoublePerlin(@as([*c]const DoublePerlinNoise, @ptrCast(@alignCast(&bn.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(bn.*.nptype)))), x, @as(f64, @floatFromInt(@as(c_int, 0))), z);
+    var p: f64 = sampleDoublePerlin(@as([*c]const DoublePerlinNoise, @ptrCast(@alignCast(&bn.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(bn.*.nptype)))), x, 0.0, z);
     _ = &p;
     if (np != null) {
         (blk: {
@@ -7774,7 +7774,7 @@ pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]c
                             _ = &colNoise;
                             genColumnNoise(snb, &colNoise, @as(f64, @floatFromInt(x)) * 0.25, @as(f64, @floatFromInt(z)) * 0.25, 4.0 / @as(f64, @floatFromInt(r.scale)));
                             processColumnNoise(@as([*c]f64, @ptrCast(@alignCast(&cols))), &colNoise, @as([*c]f64, @ptrCast(@alignCast(&climate))));
-                            if (((cols[@as(c_uint, @intCast(@as(c_int, 0)))] * 0.125) + (cols[@as(c_uint, @intCast(@as(c_int, 1)))] * 0.875)) <= @as(f64, @floatFromInt(@as(c_int, 0)))) {
+                            if (((cols[@as(c_uint, @intCast(@as(c_int, 0)))] * 0.125) + (cols[@as(c_uint, @intCast(@as(c_int, 1)))] * 0.875)) <= 0.0) {
                                 id = if (climate[@as(c_uint, @intCast(@as(c_int, 0)))] < 0.5) frozen_ocean else ocean;
                             }
                         }
@@ -7870,7 +7870,7 @@ pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]c
                     if (tmp >= 0) break :blk buf + @as(usize, @intCast(tmp)) else break :blk buf - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
                 }).*;
                 if (stripe == @as(c_int, 0)) {
-                    genColumnNoise(snb, colNoise, @as(f64, @floatFromInt(cx)), @as(f64, @floatFromInt(cz)), @as(f64, @floatFromInt(@as(c_int, 0))));
+                    genColumnNoise(snb, colNoise, @as(f64, @floatFromInt(cx)), @as(f64, @floatFromInt(cz)), 0.0);
                 }
                 _ = sampleBiomeNoiseBeta(bnb, null, @as([*c]f64, @ptrCast(@alignCast(&climate))), csx + off.static[@as(c_uint, @intCast(ci))], csz + off.static[@as(c_uint, @intCast(cj))]);
                 processColumnNoise(&cols[@as(c_uint, @intCast(@as(c_int, 0)))], colNoise, @as([*c]f64, @ptrCast(@alignCast(&climate))));
@@ -7879,7 +7879,7 @@ pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]c
                     if (tmp >= 0) break :blk buf + @as(usize, @intCast(tmp)) else break :blk buf - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
                 }).*;
                 if (cz == cz1) {
-                    genColumnNoise(snb, colNoise, @as(f64, @floatFromInt(cx + @as(c_int, 1))), @as(f64, @floatFromInt(cz)), @as(f64, @floatFromInt(@as(c_int, 0))));
+                    genColumnNoise(snb, colNoise, @as(f64, @floatFromInt(cx + @as(c_int, 1))), @as(f64, @floatFromInt(cz)), 0.0);
                 }
                 _ = sampleBiomeNoiseBeta(bnb, null, @as([*c]f64, @ptrCast(@alignCast(&climate))), csx + off.static[@as(c_uint, @intCast(ci + @as(c_int, 1)))], csz + off.static[@as(c_uint, @intCast(cj))]);
                 processColumnNoise(&cols[@as(c_uint, @intCast(@as(c_int, 2)))], colNoise, @as([*c]f64, @ptrCast(@alignCast(&climate))));
@@ -7888,7 +7888,7 @@ pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]c
                     if (tmp >= 0) break :blk buf + @as(usize, @intCast(tmp)) else break :blk buf - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
                 }).*;
                 if (cx == cx1) {
-                    genColumnNoise(snb, colNoise, @as(f64, @floatFromInt(cx)), @as(f64, @floatFromInt(cz + @as(c_int, 1))), @as(f64, @floatFromInt(@as(c_int, 0))));
+                    genColumnNoise(snb, colNoise, @as(f64, @floatFromInt(cx)), @as(f64, @floatFromInt(cz + @as(c_int, 1))), 0.0);
                 }
                 _ = sampleBiomeNoiseBeta(bnb, null, @as([*c]f64, @ptrCast(@alignCast(&climate))), csx + off.static[@as(c_uint, @intCast(ci))], csz + off.static[@as(c_uint, @intCast(cj + @as(c_int, 1)))]);
                 processColumnNoise(&cols[@as(c_uint, @intCast(@as(c_int, 4)))], colNoise, @as([*c]f64, @ptrCast(@alignCast(&climate))));
@@ -7896,7 +7896,7 @@ pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]c
                     const tmp = idx;
                     if (tmp >= 0) break :blk buf + @as(usize, @intCast(tmp)) else break :blk buf - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
                 }).*;
-                genColumnNoise(snb, colNoise, @as(f64, @floatFromInt(cx + @as(c_int, 1))), @as(f64, @floatFromInt(cz + @as(c_int, 1))), @as(f64, @floatFromInt(@as(c_int, 0))));
+                genColumnNoise(snb, colNoise, @as(f64, @floatFromInt(cx + @as(c_int, 1))), @as(f64, @floatFromInt(cz + @as(c_int, 1))), 0.0);
                 _ = sampleBiomeNoiseBeta(bnb, null, @as([*c]f64, @ptrCast(@alignCast(&climate))), csx + off.static[@as(c_uint, @intCast(ci + @as(c_int, 1)))], csz + off.static[@as(c_uint, @intCast(cj + @as(c_int, 1)))]);
                 processColumnNoise(&cols[@as(c_uint, @intCast(@as(c_int, 6)))], colNoise, @as([*c]f64, @ptrCast(@alignCast(&climate))));
                 {
@@ -7921,7 +7921,7 @@ pub fn genBiomeNoiseBetaScaled(arg_bnb: [*c]const BiomeNoiseBeta, arg_snb: [*c]c
                                 _ = &dx;
                                 var dz: f64 = @as(f64, @floatFromInt(bz & @as(c_int, 3))) * 0.25;
                                 _ = &dz;
-                                if (lerp4(@as([*c]f64, @ptrCast(@alignCast(&cols))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 0))))), @as([*c]f64, @ptrCast(@alignCast(&cols))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 2))))), @as([*c]f64, @ptrCast(@alignCast(&cols))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 4))))), @as([*c]f64, @ptrCast(@alignCast(&cols))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 6))))), 7.0 / @as(f64, @floatFromInt(@as(c_int, 8))), dx, dz) <= @as(f64, @floatFromInt(@as(c_int, 0)))) {
+                                if (lerp4(@as([*c]f64, @ptrCast(@alignCast(&cols))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 0))))), @as([*c]f64, @ptrCast(@alignCast(&cols))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 2))))), @as([*c]f64, @ptrCast(@alignCast(&cols))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 4))))), @as([*c]f64, @ptrCast(@alignCast(&cols))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 6))))), 7.0 / 8.0, dx, dz) <= 0.0) {
                                     id = if (climate[@as(c_uint, @intCast(@as(c_int, 0)))] < 0.5) frozen_ocean else ocean;
                                 }
                                 (blk: {
@@ -9204,24 +9204,24 @@ pub fn sampleNoiseColumnEnd(arg_column: [*c]f64, arg_sn: [*c]const SurfaceNoise,
             1.0,
             1.0,
             1.0,
-            63.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            62.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            61.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            60.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            59.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            58.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            57.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            56.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            55.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            54.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            53.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            52.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            51.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            50.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            49.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            48.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            47.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
-            46.0 / @as(f64, @floatFromInt(@as(c_int, 64))),
+            63.0 / 64.0,
+            62.0 / 64.0,
+            61.0 / 64.0,
+            60.0 / 64.0,
+            59.0 / 64.0,
+            58.0 / 64.0,
+            57.0 / 64.0,
+            56.0 / 64.0,
+            55.0 / 64.0,
+            54.0 / 64.0,
+            53.0 / 64.0,
+            52.0 / 64.0,
+            51.0 / 64.0,
+            50.0 / 64.0,
+            49.0 / 64.0,
+            48.0 / 64.0,
+            47.0 / 64.0,
+            46.0 / 64.0,
         };
     };
     _ = &upper_drop;
@@ -9229,12 +9229,12 @@ pub fn sampleNoiseColumnEnd(arg_column: [*c]f64, arg_sn: [*c]const SurfaceNoise,
         const static: [33]f64 = [33]f64{
             0.0,
             0.0,
-            1.0 / @as(f64, @floatFromInt(@as(c_int, 7))),
-            2.0 / @as(f64, @floatFromInt(@as(c_int, 7))),
-            3.0 / @as(f64, @floatFromInt(@as(c_int, 7))),
-            4.0 / @as(f64, @floatFromInt(@as(c_int, 7))),
-            5.0 / @as(f64, @floatFromInt(@as(c_int, 7))),
-            6.0 / @as(f64, @floatFromInt(@as(c_int, 7))),
+            1.0 / 7.0,
+            2.0 / 7.0,
+            3.0 / 7.0,
+            4.0 / 7.0,
+            5.0 / 7.0,
+            6.0 / 7.0,
             1.0,
             1.0,
             1.0,
@@ -9293,7 +9293,7 @@ pub fn sampleNoiseColumnEnd(arg_column: [*c]f64, arg_sn: [*c]const SurfaceNoise,
                 }).* = @as(f64, @floatFromInt(-@as(c_int, 30)));
                 continue;
             }
-            var noise: f64 = sampleSurfaceNoiseBetween(sn, x, y, z, @as(f64, @floatFromInt(-@as(c_int, 128))), @as(f64, @floatFromInt(@as(c_int, 128))));
+            var noise: f64 = sampleSurfaceNoiseBetween(sn, x, y, z, @as(f64, @floatFromInt(-@as(c_int, 128))), 128.0);
             _ = &noise;
             var clamped: f64 = noise + depth;
             _ = &clamped;
@@ -9377,7 +9377,7 @@ pub fn getSurfaceHeight(ncol00: [*c]const f64, ncol01: [*c]const f64, ncol10: [*
                     _ = &dy;
                     var noise: f64 = lerp3(dy, dx, dz, v000, v010, v100, v110, v001, v011, v101, v111);
                     _ = &noise;
-                    if (noise > @as(f64, @floatFromInt(@as(c_int, 0)))) return (celly * blockspercell) + y;
+                    if (noise > 0.0) return (celly * blockspercell) + y;
                 }
             }
         }
@@ -9969,8 +9969,8 @@ pub fn genColumnNoise(arg_snb: [*c]const SurfaceNoiseBeta, arg_dest: [*c]SeaLeve
     _ = &cz;
     var lacmin = arg_lacmin;
     _ = &lacmin;
-    dest.*.contASample = sampleOctaveAmp(&snb.*.octcontA, cx, @as(f64, @floatFromInt(@as(c_int, 0))), cz, @as(f64, @floatFromInt(@as(c_int, 0))), @as(f64, @floatFromInt(@as(c_int, 0))), @as(c_int, 1));
-    dest.*.contBSample = sampleOctaveAmp(&snb.*.octcontB, cx, @as(f64, @floatFromInt(@as(c_int, 0))), cz, @as(f64, @floatFromInt(@as(c_int, 0))), @as(f64, @floatFromInt(@as(c_int, 0))), @as(c_int, 1));
+    dest.*.contASample = sampleOctaveAmp(&snb.*.octcontA, cx, 0.0, cz, 0.0, 0.0, @as(c_int, 1));
+    dest.*.contBSample = sampleOctaveAmp(&snb.*.octcontB, cx, 0.0, cz, 0.0, 0.0, @as(c_int, 1));
     sampleOctaveBeta17Terrain(&snb.*.octmin, @as([*c]f64, @ptrCast(@alignCast(&dest.*.minSample))), cx, cz, @as(c_int, 0), lacmin);
     sampleOctaveBeta17Terrain(&snb.*.octmax, @as([*c]f64, @ptrCast(@alignCast(&dest.*.maxSample))), cx, cz, @as(c_int, 0), lacmin);
     sampleOctaveBeta17Terrain(&snb.*.octmain, @as([*c]f64, @ptrCast(@alignCast(&dest.*.mainSample))), cx, cz, @as(c_int, 1), lacmin);
@@ -9981,30 +9981,30 @@ pub fn processColumnNoise(arg_out: [*c]f64, arg_src: [*c]const SeaLevelColumnNoi
     var src = arg_src;
     _ = &src;
     _ = &climate;
-    var humi: f64 = @as(f64, @floatFromInt(@as(c_int, 1))) - (climate[@as(c_uint, @intCast(@as(c_int, 0)))] * climate[@as(c_uint, @intCast(@as(c_int, 1)))]);
+    var humi: f64 = 1.0 - (climate[@as(c_uint, @intCast(@as(c_int, 0)))] * climate[@as(c_uint, @intCast(@as(c_int, 1)))]);
     _ = &humi;
     humi *= humi;
     humi *= humi;
-    humi = @as(f64, @floatFromInt(@as(c_int, 1))) - humi;
-    var contA: f64 = ((src.*.contASample + @as(f64, @floatFromInt(@as(c_int, 256)))) / @as(f64, @floatFromInt(@as(c_int, 512)))) * humi;
+    humi = 1.0 - humi;
+    var contA: f64 = ((src.*.contASample + 256.0) / 512.0) * humi;
     _ = &contA;
-    contA = if (contA > @as(f64, @floatFromInt(@as(c_int, 1)))) 1.0 else contA;
-    var contB: f64 = src.*.contBSample / @as(f64, @floatFromInt(@as(c_int, 8000)));
+    contA = if (contA > 1.0) 1.0 else contA;
+    var contB: f64 = src.*.contBSample / 8000.0;
     _ = &contB;
-    if (contB < @as(f64, @floatFromInt(@as(c_int, 0)))) {
+    if (contB < 0.0) {
         contB = -contB * 0.3;
     }
-    contB = (contB * @as(f64, @floatFromInt(@as(c_int, 3)))) - @as(f64, @floatFromInt(@as(c_int, 2)));
-    if (contB < @as(f64, @floatFromInt(@as(c_int, 0)))) {
-        contB /= @as(f64, @floatFromInt(@as(c_int, 2)));
-        contB = if (contB < @as(f64, @floatFromInt(-@as(c_int, 1)))) (-1.0 / 1.4) / @as(f64, @floatFromInt(@as(c_int, 2))) else (contB / 1.4) / @as(f64, @floatFromInt(@as(c_int, 2)));
+    contB = (contB * 3.0) - 2.0;
+    if (contB < 0.0) {
+        contB /= 2.0;
+        contB = if (contB < @as(f64, @floatFromInt(-@as(c_int, 1)))) (-1.0 / 1.4) / 2.0 else (contB / 1.4) / 2.0;
         contA = 0;
     } else {
-        contB = if (contB > @as(f64, @floatFromInt(@as(c_int, 1)))) 1.0 / @as(f64, @floatFromInt(@as(c_int, 8))) else contB / @as(f64, @floatFromInt(@as(c_int, 8)));
+        contB = if (contB > 1.0) 1.0 / 8.0 else contB / 8.0;
     }
-    contA = if (contA < @as(f64, @floatFromInt(@as(c_int, 0)))) 0.5 else contA + 0.5;
-    contB = (contB * 17.0) / @as(f64, @floatFromInt(@as(c_int, 16)));
-    contB = (17.0 / @as(f64, @floatFromInt(@as(c_int, 2)))) + (contB * @as(f64, @floatFromInt(@as(c_int, 4))));
+    contA = if (contA < 0.0) 0.5 else contA + 0.5;
+    contB = (contB * 17.0) / 16.0;
+    contB = (17.0 / 2.0) + (contB * 4.0);
     var low: [*c]const f64 = @as([*c]const f64, @ptrCast(@alignCast(&src.*.minSample)));
     _ = &low;
     var high: [*c]const f64 = @as([*c]const f64, @ptrCast(@alignCast(&src.*.maxSample)));
@@ -10018,25 +10018,25 @@ pub fn processColumnNoise(arg_out: [*c]f64, arg_src: [*c]const SeaLevelColumnNoi
         while (i <= @as(c_int, 1)) : (i += 1) {
             var chooseLHS: f64 = undefined;
             _ = &chooseLHS;
-            var procCont: f64 = ((@as(f64, @floatFromInt(i + @as(c_int, 7))) - contB) * @as(f64, @floatFromInt(@as(c_int, 12)))) / contA;
+            var procCont: f64 = ((@as(f64, @floatFromInt(i + @as(c_int, 7))) - contB) * 12.0) / contA;
             _ = &procCont;
-            procCont = if (procCont < @as(f64, @floatFromInt(@as(c_int, 0)))) procCont * @as(f64, @floatFromInt(@as(c_int, 4))) else procCont;
+            procCont = if (procCont < 0.0) procCont * 4.0 else procCont;
             var lSample: f64 = (blk: {
                 const tmp = i;
                 if (tmp >= 0) break :blk low + @as(usize, @intCast(tmp)) else break :blk low - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* / @as(f64, @floatFromInt(@as(c_int, 512)));
+            }).* / 512.0;
             _ = &lSample;
             var hSample: f64 = (blk: {
                 const tmp = i;
                 if (tmp >= 0) break :blk high + @as(usize, @intCast(tmp)) else break :blk high - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* / @as(f64, @floatFromInt(@as(c_int, 512)));
+            }).* / 512.0;
             _ = &hSample;
             var sSample: f64 = (((blk: {
                 const tmp = i;
                 if (tmp >= 0) break :blk selector + @as(usize, @intCast(tmp)) else break :blk selector - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* / @as(f64, @floatFromInt(@as(c_int, 10)))) + @as(f64, @floatFromInt(@as(c_int, 1)))) / @as(f64, @floatFromInt(@as(c_int, 2)));
+            }).* / 10.0) + 1.0) / 2.0;
             _ = &sSample;
-            chooseLHS = if (sSample < 0.0) lSample else if (sSample > @as(f64, @floatFromInt(@as(c_int, 1)))) hSample else lSample + ((hSample - lSample) * sSample);
+            chooseLHS = if (sSample < 0.0) lSample else if (sSample > 1.0) hSample else lSample + ((hSample - lSample) * sSample);
             chooseLHS -= procCont;
             (blk: {
                 const tmp = i;
@@ -10771,7 +10771,7 @@ pub fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Gene
                                     }).*;
                                     _ = &id;
                                     _ = getBiomeDepthAndScale(id, &d, &s, null);
-                                    var weight: f32 = @as(f32, @floatCast(@as(f64, @floatCast(biome_kernel[@as(c_uint, @intCast((jj * @as(c_int, 5)) + ii))])) / (d + @as(f64, @floatFromInt(@as(c_int, 2))))));
+                                    var weight: f32 = @as(f32, @floatCast(@as(f64, @floatCast(biome_kernel[@as(c_uint, @intCast((jj * @as(c_int, 5)) + ii))])) / (d + 2.0)));
                                     _ = &weight;
                                     if (d > d0) {
                                         weight *= @as(f32, @floatCast(0.5));
@@ -10786,9 +10786,9 @@ pub fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Gene
                     ws /= wt;
                     wd /= wt;
                     ws = (ws * 0.9) + 0.1;
-                    wd = ((wd * 4.0) - @as(f64, @floatFromInt(@as(c_int, 1)))) / @as(f64, @floatFromInt(@as(c_int, 8)));
-                    ws = @as(f64, @floatFromInt(@as(c_int, 96))) / ws;
-                    wd = (wd * 17.0) / @as(f64, @floatFromInt(@as(c_int, 64)));
+                    wd = ((wd * 4.0) - 1.0) / 8.0;
+                    ws = 96.0 / ws;
+                    wd = (wd * 17.0) / 64.0;
                     (blk: {
                         const tmp = (j * @as(i64, @bitCast(@as(c_long, w)))) + i;
                         if (tmp >= 0) break :blk depth + @as(usize, @intCast(tmp)) else break :blk depth - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
@@ -10818,21 +10818,21 @@ pub fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Gene
                     _ = &px;
                     var pz: c_int = @as(c_int, @bitCast(@as(c_int, @truncate(@as(i64, @bitCast(@as(c_long, z))) + j))));
                     _ = &pz;
-                    var off: f64 = sampleOctaveAmp(&sn.*.octdepth, @as(f64, @floatFromInt(px * @as(c_int, 200))), @as(f64, @floatFromInt(@as(c_int, 10))), @as(f64, @floatFromInt(pz * @as(c_int, 200))), @as(f64, @floatFromInt(@as(c_int, 1))), @as(f64, @floatFromInt(@as(c_int, 0))), @as(c_int, 1));
+                    var off: f64 = sampleOctaveAmp(&sn.*.octdepth, @as(f64, @floatFromInt(px * @as(c_int, 200))), 10.0, @as(f64, @floatFromInt(pz * @as(c_int, 200))), 1.0, 0.0, @as(c_int, 1));
                     _ = &off;
-                    off *= 65535.0 / @as(f64, @floatFromInt(@as(c_int, 8000)));
-                    if (off < @as(f64, @floatFromInt(@as(c_int, 0)))) {
+                    off *= 65535.0 / 8000.0;
+                    if (off < 0.0) {
                         off = -0.3 * off;
                     }
-                    off = (off * @as(f64, @floatFromInt(@as(c_int, 3)))) - @as(f64, @floatFromInt(@as(c_int, 2)));
-                    if (off > @as(f64, @floatFromInt(@as(c_int, 1)))) {
+                    off = (off * 3.0) - 2.0;
+                    if (off > 1.0) {
                         off = 1;
                     }
-                    off *= 17.0 / @as(f64, @floatFromInt(@as(c_int, 64)));
-                    if (off < @as(f64, @floatFromInt(@as(c_int, 0)))) {
-                        off *= 1.0 / @as(f64, @floatFromInt(@as(c_int, 28)));
+                    off *= 17.0 / 64.0;
+                    if (off < 0.0) {
+                        off *= 1.0 / 28.0;
                     } else {
-                        off *= 1.0 / @as(f64, @floatFromInt(@as(c_int, 40)));
+                        off *= 1.0 / 40.0;
                     }
                     var vmin: f64 = 0;
                     _ = &vmin;
@@ -10856,7 +10856,7 @@ pub fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Gene
                                 _ = &py;
                                 var n0: f64 = sampleSurfaceNoise(sn, px, py, pz);
                                 _ = &n0;
-                                var fall: f64 = ((@as(f64, @floatFromInt(@as(c_int, 1))) - (@as(f64, @floatFromInt(@as(c_int, 2) * py)) / 32.0)) + off) - 0.46875;
+                                var fall: f64 = ((1.0 - (@as(f64, @floatFromInt(@as(c_int, 2) * py)) / 32.0)) + off) - 0.46875;
                                 _ = &fall;
                                 fall = (blk: {
                                     const tmp = (j * @as(i64, @bitCast(@as(c_long, w)))) + i;
@@ -10865,13 +10865,13 @@ pub fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Gene
                                     const tmp = (j * @as(i64, @bitCast(@as(c_long, w)))) + i;
                                     if (tmp >= 0) break :blk depth + @as(usize, @intCast(tmp)) else break :blk depth - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
                                 }).*);
-                                n0 += if (fall > @as(f64, @floatFromInt(@as(c_int, 0)))) @as(f64, @floatFromInt(@as(c_int, 4))) * fall else fall;
+                                n0 += if (fall > 0.0) 4.0 * fall else fall;
                                 v[@as(c_uint, @intCast(k))] = n0;
-                                if ((n0 >= @as(f64, @floatFromInt(@as(c_int, 0)))) and (py > ymin)) {
+                                if ((n0 >= 0.0) and (py > ymin)) {
                                     ymin = py;
                                     vmin = n0;
                                 }
-                                if ((n0 < @as(f64, @floatFromInt(@as(c_int, 0)))) and (py < ymax)) {
+                                if ((n0 < 0.0) and (py < ymax)) {
                                     ymax = py;
                                     vmax = n0;
                                 }
@@ -10879,7 +10879,7 @@ pub fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Gene
                         }
                         var dy: f64 = v[@as(c_uint, @intCast(@as(c_int, 0)))] / (v[@as(c_uint, @intCast(@as(c_int, 0)))] - v[@as(c_uint, @intCast(@as(c_int, 1)))]);
                         _ = &dy;
-                        dy = if (dy <= @as(f64, @floatFromInt(@as(c_int, 0)))) floor(dy) else ceil(dy);
+                        dy = if (dy <= 0.0) floor(dy) else ceil(dy);
                         ytest += @as(c_int, @intFromFloat(dy));
                         if (ytest <= ymin) {
                             ytest = ymin + @as(c_int, 1);
@@ -10892,7 +10892,7 @@ pub fn mapApproxHeight(arg_y: [*c]f32, arg_ids: [*c]c_int, arg_g: [*c]const Gene
                     (blk: {
                         const tmp = (j * @as(i64, @bitCast(@as(c_long, w)))) + i;
                         if (tmp >= 0) break :blk y + @as(usize, @intCast(tmp)) else break :blk y - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-                    }).* = @as(f32, @floatCast(@as(f64, @floatFromInt(@as(c_int, 8))) * ((vmin / (vmin - vmax)) + @as(f64, @floatFromInt(ymin)))));
+                    }).* = @as(f32, @floatCast(8.0 * ((vmin / (vmin - vmax)) + @as(f64, @floatFromInt(ymin)))));
                 }
             }
         }
@@ -13580,7 +13580,7 @@ pub fn findFittest(arg_g: [*c]const Generator, arg_pos: [*c]Pos, arg_fitness: [*
         while (rad <= maxrad) : (rad += step) {
             {
                 ang = 0;
-                while (ang <= (3.141592653589793 * @as(f64, @floatFromInt(@as(c_int, 2))))) : (ang += step / rad) {
+                while (ang <= (3.141592653589793 * 2.0)) : (ang += step / rad) {
                     var x: c_int = p.x + @as(c_int, @intFromFloat(sin(ang) * rad));
                     _ = &x;
                     var z: c_int = p.z + @as(c_int, @intFromFloat(cos(ang) * rad));
