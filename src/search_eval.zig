@@ -1434,9 +1434,12 @@ fn combinedBiomeThreshold(
 
     const biome_start = if (active_eval_telemetry != null) std.time.nanoTimestamp() else 0;
 
-    // --- Coarse prescan at stride 4 for quick accept/reject ---
-    // Sample a sparse grid first; if any biome gets zero coarse hits we reject
-    // early, and if every biome already meets its threshold we accept.
+    // --- Coarse prescans for quick accept/reject ---
+    // Sample progressively finer sparse grids; if any biome gets zero coarse
+    // hits we reject early, and if every biome already meets its threshold
+    // we accept.
+
+    // Phase 1: stride=4
     if (!use_points and min_stride == 1 and max_req.coarse_offsets_4.len > 0 and
         max_req.coarse_offsets_4.len < iter_offsets.len)
     {
@@ -1605,7 +1608,24 @@ fn biomeThresholdMatched(g: *c.Generator, anchor: c.Pos, req: BiomeReq) bool {
     // Each phase either accepts (>= min_count), rejects (0),
     // or is uncertain (0 < n < min_count) and falls through.
     if (stride == 1 and req.min_count > 1) {
-        // Phase 1: stride=4 (coarsest, ~1/4 the points of stride=2)
+        // Phase 0: stride=8 (coarsest, ~1/4 the points of stride=4)
+        if (req.coarse_offsets_8.len > 0 and
+            req.coarse_offsets_8.len < req.coarse_offsets_4.len)
+        {
+            const coarse8_count = countBiomeMatchesWithBounds(
+                g,
+                anchor,
+                req.biome_id,
+                req.min_count,
+                req.coarse_offsets_8,
+                req.climate_bounds,
+            );
+            if (coarse8_count >= req.min_count) return true;
+            if (coarse8_count == 0) return false;
+            // Uncertain: try stride=4
+        }
+
+        // Phase 1: stride=4 (~1/4 the points of stride=2)
         if (req.coarse_offsets_4.len > 0 and
             req.coarse_offsets_4.len < req.offsets.len)
         {

@@ -91,6 +91,7 @@ pub const BiomeReq = struct {
     offsets: []BiomeOffset = &.{},
     coarse_offsets_2: []BiomeOffset = &.{},
     coarse_offsets_4: []BiomeOffset = &.{},
+    coarse_offsets_8: []BiomeOffset = &.{},
     points: []BiomePoint = &.{},
     climate_bounds: ?BiomeClimateBounds = null,
 };

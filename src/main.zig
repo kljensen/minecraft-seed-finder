@@ -435,6 +435,7 @@ pub fn freeConstraints(allocator: std.mem.Allocator, constraints: []Constraint) 
                 allocator.free(v.offsets);
                 allocator.free(v.coarse_offsets_2);
                 allocator.free(v.coarse_offsets_4);
+                allocator.free(v.coarse_offsets_8);
                 allocator.free(v.points);
             },
             .structure => |v| {
@@ -936,6 +937,7 @@ pub fn main() !void {
                 .offsets = try buildBiomeOffsets(allocator, parsed.radius),
                 .coarse_offsets_2 = try buildBiomeOffsetsStrided(allocator, parsed.radius, 2),
                 .coarse_offsets_4 = try buildBiomeOffsetsStrided(allocator, parsed.radius, 4),
+                .coarse_offsets_8 = try buildBiomeOffsetsStrided(allocator, parsed.radius, 8),
                 .points = &.{},
             } });
             try biome_constraint_ids.append(constraints.items.len - 1);
