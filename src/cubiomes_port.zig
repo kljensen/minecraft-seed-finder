@@ -9464,60 +9464,54 @@ pub fn createLandSpline(arg_ss: [*c]SplineStack, arg_f: f32, arg_g: f32, arg_h: 
     addSplineVal(sp, 0.699999988079071, sp9, 0.0);
     return sp;
 }
-pub fn getSpline(arg_sp: [*c]const Spline, arg_vals: [*c]const f32) f32 {
-    var sp = arg_sp;
-    _ = &sp;
-    var vals = arg_vals;
-    _ = &vals;
-    if ((!(sp != null) or (sp.*.len <= @as(c_int, 0))) or (sp.*.len >= @as(c_int, 12))) {
+/// Evaluate a cubic Hermite spline tree at the given climate parameter values.
+/// Spline nodes reference child splines recursively; leaf nodes (len == 1) are
+/// FixSpline values.  The `typ` field selects which climate parameter to
+/// interpolate along (index into `vals`).
+pub fn getSpline(sp: [*c]const Spline, vals: [*c]const f32) f32 {
+    if (sp == null or sp.*.len <= 0 or sp.*.len >= 12) {
         _ = printf("getSpline(): bad parameters\n");
-        exit(@as(c_int, 1));
+        exit(1);
     }
-    if (sp.*.len == @as(c_int, 1)) return @as([*c]FixSpline, @ptrCast(@volatileCast(@constCast(sp)))).*.val;
-    var f: f32 = (blk: {
-        const tmp = sp.*.typ;
-        if (tmp >= 0) break :blk vals + @as(usize, @intCast(tmp)) else break :blk vals - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-    }).*;
-    _ = &f;
-    var i: c_int = undefined;
-    _ = &i;
-    {
-        i = 0;
-        while (i < sp.*.len) : (i += 1) if (sp.*.loc[@as(c_uint, @intCast(i))] >= f) break;
+
+    // Leaf node: reinterpret as FixSpline to get the constant value.
+    if (sp.*.len == 1)
+        return @as(*const FixSpline, @ptrCast(@alignCast(sp))).val;
+
+    const len: usize = @intCast(sp.*.len);
+    const f = vals[@intCast(sp.*.typ)];
+
+    // Find the first knot location >= f.
+    var i: usize = 0;
+    while (i < len) : (i += 1) {
+        if (sp.*.loc[i] >= f) break;
     }
-    if ((i == @as(c_int, 0)) or (i == sp.*.len)) {
-        if (i != 0) {
-            i -= 1;
-        }
-        var v: f32 = getSpline(sp.*.val[@as(c_uint, @intCast(i))], vals);
-        _ = &v;
-        return v + (sp.*.der[@as(c_uint, @intCast(i))] * (f - sp.*.loc[@as(c_uint, @intCast(i))]));
+
+    // Extrapolation: clamp to first or last segment and use linear extension.
+    if (i == 0 or i == len) {
+        const idx = if (i == 0) @as(usize, 0) else len - 1;
+        const v = getSpline(sp.*.val[idx], vals);
+        return v + sp.*.der[idx] * (f - sp.*.loc[idx]);
     }
-    var sp1: [*c]const Spline = sp.*.val[@as(c_uint, @intCast(i - @as(c_int, 1)))];
-    _ = &sp1;
-    var sp2: [*c]const Spline = sp.*.val[@as(c_uint, @intCast(i))];
-    _ = &sp2;
-    var g: f32 = sp.*.loc[@as(c_uint, @intCast(i - @as(c_int, 1)))];
-    _ = &g;
-    var h: f32 = sp.*.loc[@as(c_uint, @intCast(i))];
-    _ = &h;
-    var k: f32 = (f - g) / (h - g);
-    _ = &k;
-    var l: f32 = sp.*.der[@as(c_uint, @intCast(i - @as(c_int, 1)))];
-    _ = &l;
-    var m: f32 = sp.*.der[@as(c_uint, @intCast(i))];
-    _ = &m;
-    var n: f32 = getSpline(sp1, vals);
-    _ = &n;
-    var o: f32 = getSpline(sp2, vals);
-    _ = &o;
-    var p: f32 = (l * (h - g)) - (o - n);
-    _ = &p;
-    var q: f32 = (-m * (h - g)) + (o - n);
-    _ = &q;
-    var r: f32 = @as(f32, @floatCast(lerp(@as(f64, @floatCast(k)), @as(f64, @floatCast(n)), @as(f64, @floatCast(o))) + (@as(f64, @floatCast(k * (1.0 - k))) * lerp(@as(f64, @floatCast(k)), @as(f64, @floatCast(p)), @as(f64, @floatCast(q))))));
-    _ = &r;
-    return r;
+
+    // Cubic Hermite interpolation between knots i-1 and i.
+    const lo = i - 1;
+    const lo_loc = sp.*.loc[lo];
+    const hi_loc = sp.*.loc[i];
+    const span = hi_loc - lo_loc;
+    const t = (f - lo_loc) / span;
+
+    const lo_der = sp.*.der[lo];
+    const hi_der = sp.*.der[i];
+    const lo_val = getSpline(sp.*.val[lo], vals);
+    const hi_val = getSpline(sp.*.val[i], vals);
+
+    // Hermite basis: p = h00*lo + h10*lo' + h01*hi + h11*hi'
+    const p = (lo_der * span) - (hi_val - lo_val);
+    const q = (-hi_der * span) + (hi_val - lo_val);
+
+    return @floatCast(@as(f64, lerp(@floatCast(t), @floatCast(lo_val), @floatCast(hi_val))) +
+        @as(f64, t * (1.0 - t)) * lerp(@as(f64, @floatCast(t)), @as(f64, @floatCast(p)), @as(f64, @floatCast(q))));
 }
 pub fn get_np_dist(np: [*c]const u64, arg_bt: [*c]const BiomeTree, arg_idx: c_int) u64 {
     _ = &np;
