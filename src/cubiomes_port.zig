@@ -3066,82 +3066,56 @@ pub fn setBetaBiomeSeed(arg_bnb: [*c]BiomeNoiseBeta, arg_seed: u64) void {
     octaveInitBeta(@as([*c]OctaveNoise, @ptrCast(@alignCast(&bnb.*.climate))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 2))))), &seedScratch, @as([*c]PerlinNoise, @ptrCast(@alignCast(&bnb.*.oct))) + @as(usize, @bitCast(@as(isize, @intCast(@as(c_int, 8))))), @as(c_int, 2), 0.25 / 1.5, 10.0 / 17.0, 0.55, 2.0);
     bnb.*.nptype = -@as(c_int, 1);
 }
-pub fn sampleBiomeNoise(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_dat: [*c]u64, arg_sample_flags: u32) c_int {
-    var bn = arg_bn;
-    _ = &bn;
-    var np = arg_np;
-    _ = &np;
-    var x = arg_x;
-    _ = &x;
-    var y = arg_y;
-    _ = &y;
-    var z = arg_z;
-    _ = &z;
-    var dat = arg_dat;
-    _ = &dat;
-    var sample_flags = arg_sample_flags;
-    _ = &sample_flags;
-    if (bn.*.nptype >= @as(c_int, 0)) {
-        if (np != null) {
-            _ = memset(@as(?*anyopaque, @ptrCast(np)), @as(c_int, 0), @as(c_ulong, @bitCast(@as(c_long, NP_MAX))) *% @sizeOf(i64));
+pub fn sampleBiomeNoise(bn: [*c]const BiomeNoise, np_out: [*c]i64, x: c_int, y: c_int, z: c_int, dat: [*c]u64, sample_flags: u32) c_int {
+    // Single-parameter mode (temperature-only or similar)
+    if (bn.*.nptype >= 0) {
+        if (np_out != null) {
+            @memset(@as([*]i64, @ptrCast(np_out))[0..@intCast(NP_MAX)], 0);
         }
-        var id: i64 = @as(i64, @intFromFloat(10000.0 * sampleClimatePara(bn, np, @as(f64, @floatFromInt(x)), @as(f64, @floatFromInt(z)))));
-        _ = &id;
-        return @as(c_int, @bitCast(@as(c_int, @truncate(id))));
+        return @truncate(@as(i64, @intFromFloat(10000.0 * sampleClimatePara(bn, np_out, @floatFromInt(x), @floatFromInt(z)))));
     }
-    var t: f32 = 0;
-    _ = &t;
-    var h: f32 = 0;
-    _ = &h;
-    var c: f32 = 0;
-    _ = &c;
-    var e: f32 = 0;
-    _ = &e;
-    var d: f32 = 0;
-    _ = &d;
-    var w: f32 = 0;
-    _ = &w;
-    var px: f64 = @as(f64, @floatFromInt(x));
-    _ = &px;
-    var pz: f64 = @as(f64, @floatFromInt(z));
-    _ = &pz;
-    if (!((sample_flags & @as(u32, @bitCast(SAMPLE_NO_SHIFT))) != 0)) {
-        px += sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_SHIFT))], @as(f64, @floatFromInt(x)), 0.0, @as(f64, @floatFromInt(z))) * 4.0;
-        pz += sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_SHIFT))], @as(f64, @floatFromInt(z)), @as(f64, @floatFromInt(x)), 0.0) * 4.0;
+
+    // Apply shift noise to get shifted coordinates
+    var px: f64 = @floatFromInt(x);
+    var pz: f64 = @floatFromInt(z);
+    if (sample_flags & @as(u32, @bitCast(SAMPLE_NO_SHIFT)) == 0) {
+        const shift = &bn.*.climate[@intCast(NP_SHIFT)];
+        px += sampleDoublePerlin(shift, @floatFromInt(x), 0.0, @floatFromInt(z)) * 4.0;
+        pz += sampleDoublePerlin(shift, @floatFromInt(z), @floatFromInt(x), 0.0) * 4.0;
     }
-    c = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_CONTINENTALNESS))], px, 0.0, pz)));
-    e = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_EROSION))], px, 0.0, pz)));
-    w = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_WEIRDNESS))], px, 0.0, pz)));
-    if (!((sample_flags & @as(u32, @bitCast(SAMPLE_NO_DEPTH))) != 0)) {
-        var np_param: [4]f32 = [4]f32{
-            c,
-            e,
-            -3.0 * (fabsf(fabsf(w) - 0.6666666865348816) - 0.3333333432674408),
-            w,
+
+    // Sample the five climate noise parameters
+    const cont: f32 = @floatCast(sampleDoublePerlin(&bn.*.climate[@intCast(NP_CONTINENTALNESS)], px, 0.0, pz));
+    const eros: f32 = @floatCast(sampleDoublePerlin(&bn.*.climate[@intCast(NP_EROSION)], px, 0.0, pz));
+    const weird: f32 = @floatCast(sampleDoublePerlin(&bn.*.climate[@intCast(NP_WEIRDNESS)], px, 0.0, pz));
+
+    // Compute depth from spline (unless suppressed)
+    var depth: f32 = 0;
+    if (sample_flags & @as(u32, @bitCast(SAMPLE_NO_DEPTH)) == 0) {
+        var np_param = [4]f32{
+            cont, eros,
+            -3.0 * (@abs(@abs(weird) - 0.6666666865348816) - 0.3333333432674408),
+            weird,
         };
-        _ = &np_param;
-        var off: f64 = @as(f64, @floatCast(getSpline(bn.*.sp, @as([*c]f32, @ptrCast(@alignCast(&np_param)))) + 0.014999999664723873));
-        _ = &off;
-        d = @as(f32, @floatCast(((1.0 - (@as(f64, @floatFromInt(y * @as(c_int, 4))) / 128.0)) - (83.0 / 160.0)) + off));
+        const off: f64 = @floatCast(getSpline(bn.*.sp, @ptrCast(&np_param)) + 0.014999999664723873);
+        depth = @floatCast(((1.0 - (@as(f64, @floatFromInt(y * 4)) / 128.0)) - (83.0 / 160.0)) + off);
     }
-    t = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_TEMPERATURE))], px, 0.0, pz)));
-    h = @as(f32, @floatCast(sampleDoublePerlin(&bn.*.climate[@as(c_uint, @intCast(NP_HUMIDITY))], px, 0.0, pz)));
+
+    const temp: f32 = @floatCast(sampleDoublePerlin(&bn.*.climate[@intCast(NP_TEMPERATURE)], px, 0.0, pz));
+    const humid: f32 = @floatCast(sampleDoublePerlin(&bn.*.climate[@intCast(NP_HUMIDITY)], px, 0.0, pz));
+
+    // Write noise parameters as i64 (scaled by 10000)
     var l_np: [6]i64 = undefined;
-    _ = &l_np;
-    var p_np: [*c]i64 = if (np != null) np else @as([*c]i64, @ptrCast(@alignCast(&l_np)));
-    _ = &p_np;
-    p_np[@as(c_uint, @intCast(@as(c_int, 0)))] = @as(i64, @intFromFloat(10000.0 * t));
-    p_np[@as(c_uint, @intCast(@as(c_int, 1)))] = @as(i64, @intFromFloat(10000.0 * h));
-    p_np[@as(c_uint, @intCast(@as(c_int, 2)))] = @as(i64, @intFromFloat(10000.0 * c));
-    p_np[@as(c_uint, @intCast(@as(c_int, 3)))] = @as(i64, @intFromFloat(10000.0 * e));
-    p_np[@as(c_uint, @intCast(@as(c_int, 4)))] = @as(i64, @intFromFloat(10000.0 * d));
-    p_np[@as(c_uint, @intCast(@as(c_int, 5)))] = @as(i64, @intFromFloat(10000.0 * w));
-    var id: c_int = none;
-    _ = &id;
-    if (!((sample_flags & @as(u32, @bitCast(SAMPLE_NO_BIOME))) != 0)) {
-        id = climateToBiome(bn.*.mc, @as([*c]const u64, @ptrCast(@alignCast(p_np))), dat);
-    }
-    return id;
+    const p_np: [*]i64 = if (np_out != null) @ptrCast(np_out) else &l_np;
+    p_np[0] = @intFromFloat(10000.0 * temp);
+    p_np[1] = @intFromFloat(10000.0 * humid);
+    p_np[2] = @intFromFloat(10000.0 * cont);
+    p_np[3] = @intFromFloat(10000.0 * eros);
+    p_np[4] = @intFromFloat(10000.0 * depth);
+    p_np[5] = @intFromFloat(10000.0 * weird);
+
+    if (sample_flags & @as(u32, @bitCast(SAMPLE_NO_BIOME)) != 0) return none;
+    return climateToBiome(bn.*.mc, @ptrCast(@alignCast(p_np)), dat);
 }
 pub fn sampleBiomeNoiseBeta(arg_bnb: [*c]const BiomeNoiseBeta, arg_np: [*c]i64, arg_nv: [*c]f64, arg_x: c_int, arg_z: c_int) c_int {
     var bnb = arg_bnb;
@@ -7324,91 +7298,46 @@ pub fn getOldBetaBiome(arg_t: f32, arg_h: f32) c_int {
     _ = &idx;
     return bmap.static[biome_table_beta_1_7.static[@as(c_uint, @intCast(idx))]];
 }
-pub fn climateToBiome(arg_mc: c_int, np: [*c]const u64, arg_dat: [*c]u64) c_int {
-    var mc = arg_mc;
-    _ = &mc;
-    _ = &np;
-    var dat = arg_dat;
-    _ = &dat;
-    const btree18 = struct {
-        const static: BiomeTree = BiomeTree{
-            .steps = @as([*c]const u32, @ptrCast(@alignCast(&btree18_steps))),
-            .param = &btree18_param[@as(c_uint, @intCast(@as(c_int, 0)))][@as(c_uint, @intCast(@as(c_int, 0)))],
-            .nodes = @as([*c]const u64, @ptrCast(@alignCast(&btree18_nodes))),
-            .order = @as(u32, @bitCast(btree18_order)),
-            .len = @as(u32, @bitCast(@as(c_uint, @truncate(@sizeOf([8421]u64) / @sizeOf(u64))))),
-        };
-    };
-    _ = &btree18;
-    const btree192 = struct {
-        const static: BiomeTree = BiomeTree{
-            .steps = @as([*c]const u32, @ptrCast(@alignCast(&btree192_steps))),
-            .param = &btree192_param[@as(c_uint, @intCast(@as(c_int, 0)))][@as(c_uint, @intCast(@as(c_int, 0)))],
-            .nodes = @as([*c]const u64, @ptrCast(@alignCast(&btree192_nodes))),
-            .order = @as(u32, @bitCast(btree192_order)),
-            .len = @as(u32, @bitCast(@as(c_uint, @truncate(@sizeOf([8438]u64) / @sizeOf(u64))))),
-        };
-    };
-    _ = &btree192;
-    const btree19 = struct {
-        const static: BiomeTree = BiomeTree{
-            .steps = @as([*c]const u32, @ptrCast(@alignCast(&btree19_steps))),
-            .param = &btree19_param[@as(c_uint, @intCast(@as(c_int, 0)))][@as(c_uint, @intCast(@as(c_int, 0)))],
-            .nodes = @as([*c]const u64, @ptrCast(@alignCast(&btree19_nodes))),
-            .order = @as(u32, @bitCast(btree19_order)),
-            .len = @as(u32, @bitCast(@as(c_uint, @truncate(@sizeOf([9112]u64) / @sizeOf(u64))))),
-        };
-    };
-    _ = &btree19;
-    const btree20 = struct {
-        const static: BiomeTree = BiomeTree{
-            .steps = @as([*c]const u32, @ptrCast(@alignCast(&btree20_steps))),
-            .param = &btree20_param[@as(c_uint, @intCast(@as(c_int, 0)))][@as(c_uint, @intCast(@as(c_int, 0)))],
-            .nodes = @as([*c]const u64, @ptrCast(@alignCast(&btree20_nodes))),
-            .order = @as(u32, @bitCast(btree20_order)),
-            .len = @as(u32, @bitCast(@as(c_uint, @truncate(@sizeOf([9112]u64) / @sizeOf(u64))))),
-        };
-    };
-    _ = &btree20;
-    const btree21wd = struct {
-        const static: BiomeTree = BiomeTree{
-            .steps = @as([*c]const u32, @ptrCast(@alignCast(&btree21wd_steps))),
-            .param = &btree21wd_param[@as(c_uint, @intCast(@as(c_int, 0)))][@as(c_uint, @intCast(@as(c_int, 0)))],
-            .nodes = @as([*c]const u64, @ptrCast(@alignCast(&btree21wd_nodes))),
-            .order = @as(u32, @bitCast(btree21wd_order)),
-            .len = @as(u32, @bitCast(@as(c_uint, @truncate(@sizeOf([9112]u64) / @sizeOf(u64))))),
-        };
-    };
-    _ = &btree21wd;
-    var bt: [*c]const BiomeTree = undefined;
-    _ = &bt;
-    var idx: c_int = undefined;
-    _ = &idx;
-    if (mc >= MC_1_21_WD) {
-        bt = &btree21wd.static;
-    } else if (mc >= MC_1_20_6) {
-        bt = &btree20.static;
-    } else if (mc >= MC_1_19_4) {
-        bt = &btree19.static;
-    } else if (mc >= MC_1_19_2) {
-        bt = &btree192.static;
-    } else {
-        bt = &btree18.static;
-    }
-    if (dat != null) {
-        var alt: c_int = @as(c_int, @bitCast(@as(c_uint, @truncate(dat.*))));
-        _ = &alt;
-        var ds: u64 = biome_tree.getNpDist(np, bt.*.param, bt.*.nodes, alt);
-        _ = &ds;
-        idx = biome_tree.getResultingNode(np, bt.*.steps, bt.*.param, bt.*.nodes, bt.*.len, bt.*.order, @as(c_int, 0), alt, ds, @as(c_int, 0));
-        dat.* = @as(u64, @bitCast(@as(c_long, idx)));
-    } else {
-        idx = biome_tree.getResultingNode(np, bt.*.steps, bt.*.param, bt.*.nodes, bt.*.len, bt.*.order, @as(c_int, 0), @as(c_int, 0), @as(u64, @bitCast(@as(c_long, -@as(c_int, 1)))), @as(c_int, 0));
-    }
-    return @as(c_int, @bitCast(@as(c_uint, @truncate(((blk: {
-        const tmp = idx;
-        if (tmp >= 0) break :blk bt.*.nodes + @as(usize, @intCast(tmp)) else break :blk bt.*.nodes - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-    }).* >> @intCast(48)) & @as(u64, @bitCast(@as(c_long, @as(c_int, 255))))))));
+pub fn climateToBiome(mc: c_int, np: [*c]const u64, dat: [*c]u64) c_int {
+    const makeBT = struct {
+        fn f(
+            comptime steps: anytype,
+            comptime param: anytype,
+            comptime nodes: anytype,
+            comptime order: c_int,
+        ) BiomeTree {
+            return .{
+                .steps = @ptrCast(&steps),
+                .param = @ptrCast(&param),
+                .nodes = @ptrCast(&nodes),
+                .order = @bitCast(order),
+                .len = nodes.len,
+            };
+        }
+    }.f;
+
+    const bt: *const BiomeTree = if (mc >= MC_1_21_WD)
+        &comptime makeBT(btree21wd_steps, btree21wd_param, btree21wd_nodes, btree21wd_order)
+    else if (mc >= MC_1_20_6)
+        &comptime makeBT(btree20_steps, btree20_param, btree20_nodes, btree20_order)
+    else if (mc >= MC_1_19_4)
+        &comptime makeBT(btree19_steps, btree19_param, btree19_nodes, btree19_order)
+    else if (mc >= MC_1_19_2)
+        &comptime makeBT(btree192_steps, btree192_param, btree192_nodes, btree192_order)
+    else
+        &comptime makeBT(btree18_steps, btree18_param, btree18_nodes, btree18_order);
+
+    const idx: c_int = if (dat != null) blk: {
+        const alt: c_int = @bitCast(@as(c_uint, @truncate(dat.*)));
+        const ds = biome_tree.getNpDist(np, bt.param, bt.nodes, alt);
+        const result = biome_tree.getResultingNode(np, bt.steps, bt.param, bt.nodes, bt.len, bt.order, 0, alt, ds, 0);
+        dat.* = @bitCast(@as(i64, result));
+        break :blk result;
+    } else biome_tree.getResultingNode(np, bt.steps, bt.param, bt.nodes, bt.len, bt.order, 0, 0, @bitCast(@as(i64, -1)), 0);
+
+    // Extract biome ID from bits [48..55] of the node at `idx`.
+    const node = bt.nodes[@as(usize, @intCast(idx))];
+    return @intCast((node >> 48) & 0xff);
 }
 pub fn sampleClimatePara(arg_bn: [*c]const BiomeNoise, arg_np: [*c]i64, arg_x: f64, arg_z: f64) f64 {
     var bn = arg_bn;
