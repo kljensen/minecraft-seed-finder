@@ -248,80 +248,30 @@ pub fn xNextIntJ(arg_xr: [*c]Xoroshiro, arg_n: u32) c_int {
     }
     return val;
 }
-pub fn mcStepSeed(arg_s: u64, arg_salt: u64) u64 {
-    var s = arg_s;
-    _ = &s;
-    var salt = arg_salt;
-    _ = &salt;
-    return @as(u64, @bitCast(@as(c_ulong, @truncate((@as(c_ulonglong, @bitCast(@as(c_ulonglong, s))) *% ((@as(c_ulonglong, @bitCast(@as(c_ulonglong, s))) *% @as(c_ulonglong, 6364136223846793005)) +% @as(c_ulonglong, 1442695040888963407))) +% @as(c_ulonglong, @bitCast(@as(c_ulonglong, salt)))))));
+pub fn mcStepSeed(s: u64, salt: u64) u64 {
+    return s *% (s *% 6364136223846793005 +% 1442695040888963407) +% salt;
 }
-pub fn getLayerSalt(arg_salt: u64) u64 {
-    var salt = arg_salt;
-    _ = &salt;
-    var ls: u64 = mcStepSeed(salt, salt);
-    _ = &ls;
+
+pub fn getLayerSalt(salt: u64) u64 {
+    var ls = mcStepSeed(salt, salt);
     ls = mcStepSeed(ls, salt);
     ls = mcStepSeed(ls, salt);
     return ls;
 }
-pub fn lerp(arg_part: f64, arg_from: f64, arg_to: f64) f64 {
-    var part = arg_part;
-    _ = &part;
-    var from = arg_from;
-    _ = &from;
-    var to = arg_to;
-    _ = &to;
-    return from + (part * (to - from));
+
+pub fn lerp(part: f64, from: f64, to: f64) f64 {
+    return from + part * (to - from);
 }
-pub fn lerp2(arg_dx: f64, arg_dy: f64, arg_v00: f64, arg_v10: f64, arg_v01: f64, arg_v11: f64) f64 {
-    var dx = arg_dx;
-    _ = &dx;
-    var dy = arg_dy;
-    _ = &dy;
-    var v00 = arg_v00;
-    _ = &v00;
-    var v10 = arg_v10;
-    _ = &v10;
-    var v01 = arg_v01;
-    _ = &v01;
-    var v11 = arg_v11;
-    _ = &v11;
+
+pub fn lerp2(dx: f64, dy: f64, v00: f64, v10: f64, v01: f64, v11: f64) f64 {
     return lerp(dy, lerp(dx, v00, v10), lerp(dx, v01, v11));
 }
-pub fn lerp3(arg_dx: f64, arg_dy: f64, arg_dz: f64, arg_v000: f64, arg_v100: f64, arg_v010: f64, arg_v110: f64, arg_v001: f64, arg_v101: f64, arg_v011: f64, arg_v111: f64) f64 {
-    var dx = arg_dx;
-    _ = &dx;
-    var dy = arg_dy;
-    _ = &dy;
-    var dz = arg_dz;
-    _ = &dz;
-    var v000 = arg_v000;
-    _ = &v000;
-    var v100 = arg_v100;
-    _ = &v100;
-    var v010 = arg_v010;
-    _ = &v010;
-    var v110 = arg_v110;
-    _ = &v110;
-    var v001 = arg_v001;
-    _ = &v001;
-    var v101 = arg_v101;
-    _ = &v101;
-    var v011 = arg_v011;
-    _ = &v011;
-    var v111 = arg_v111;
-    _ = &v111;
-    v000 = lerp2(dx, dy, v000, v100, v010, v110);
-    v001 = lerp2(dx, dy, v001, v101, v011, v111);
-    return lerp(dz, v000, v001);
+
+pub fn lerp3(dx: f64, dy: f64, dz: f64, v000: f64, v100: f64, v010: f64, v110: f64, v001: f64, v101: f64, v011: f64, v111: f64) f64 {
+    return lerp(dz, lerp2(dx, dy, v000, v100, v010, v110), lerp2(dx, dy, v001, v101, v011, v111));
 }
-pub fn clampedLerp(arg_part: f64, arg_from: f64, arg_to: f64) f64 {
-    var part = arg_part;
-    _ = &part;
-    var from = arg_from;
-    _ = &from;
-    var to = arg_to;
-    _ = &to;
+
+pub fn clampedLerp(part: f64, from: f64, to: f64) f64 {
     if (part <= 0.0) return from;
     if (part >= 1.0) return to;
     return lerp(part, from, to);
@@ -362,9 +312,7 @@ pub const struct_DoublePerlinNoise = extern struct {
     octB: OctaveNoise = @import("std").mem.zeroes(OctaveNoise),
 };
 pub const DoublePerlinNoise = struct_DoublePerlinNoise;
-pub fn maintainPrecision(arg_x: f64) f64 {
-    var x = arg_x;
-    _ = &x;
+pub fn maintainPrecision(x: f64) f64 {
     return x;
 }
 pub fn perlinInit(arg_noise: [*c]PerlinNoise, arg_seed: [*c]u64) void {
@@ -932,104 +880,35 @@ pub fn xOctaveInit(arg_noise: [*c]OctaveNoise, arg_xr: [*c]Xoroshiro, arg_octave
     noise.*.octcnt = n;
     return n;
 }
-pub fn sampleOctave(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64, arg_z: f64) f64 {
-    var noise = arg_noise;
-    _ = &noise;
-    var x = arg_x;
-    _ = &x;
-    var y = arg_y;
-    _ = &y;
-    var z = arg_z;
-    _ = &z;
+pub fn sampleOctave(noise: [*c]const OctaveNoise, x: f64, y: f64, z: f64) f64 {
     var v: f64 = 0;
-    _ = &v;
-    var i: c_int = undefined;
-    _ = &i;
-    {
-        i = 0;
-        while (i < noise.*.octcnt) : (i += 1) {
-            var p: [*c]PerlinNoise = noise.*.octaves + @as(usize, @bitCast(@as(isize, @intCast(i))));
-            _ = &p;
-            var lf: f64 = p.*.lacunarity;
-            _ = &lf;
-            var ax: f64 = maintainPrecision(x * lf);
-            _ = &ax;
-            var ay: f64 = maintainPrecision(y * lf);
-            _ = &ay;
-            var az: f64 = maintainPrecision(z * lf);
-            _ = &az;
-            var pv: f64 = samplePerlin(p, ax, ay, az, 0.0, 0.0);
-            _ = &pv;
-            v += p.*.amplitude * pv;
-        }
+    var i: c_int = 0;
+    while (i < noise.*.octcnt) : (i += 1) {
+        const p: [*c]PerlinNoise = noise.*.octaves + @as(usize, @intCast(i));
+        const lf = p.*.lacunarity;
+        v += p.*.amplitude * samplePerlin(p, maintainPrecision(x * lf), maintainPrecision(y * lf), maintainPrecision(z * lf), 0.0, 0.0);
     }
     return v;
 }
-pub fn sampleOctaveAmp(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_y: f64, arg_z: f64, arg_yamp: f64, arg_ymin: f64, arg_ydefault: c_int) f64 {
-    var noise = arg_noise;
-    _ = &noise;
-    var x = arg_x;
-    _ = &x;
-    var y = arg_y;
-    _ = &y;
-    var z = arg_z;
-    _ = &z;
-    var yamp = arg_yamp;
-    _ = &yamp;
-    var ymin = arg_ymin;
-    _ = &ymin;
-    var ydefault = arg_ydefault;
-    _ = &ydefault;
+pub fn sampleOctaveAmp(noise: [*c]const OctaveNoise, x: f64, y: f64, z: f64, yamp: f64, ymin: f64, ydefault: c_int) f64 {
     var v: f64 = 0;
-    _ = &v;
-    var i: c_int = undefined;
-    _ = &i;
-    {
-        i = 0;
-        while (i < noise.*.octcnt) : (i += 1) {
-            var p: [*c]PerlinNoise = noise.*.octaves + @as(usize, @bitCast(@as(isize, @intCast(i))));
-            _ = &p;
-            var lf: f64 = p.*.lacunarity;
-            _ = &lf;
-            var ax: f64 = maintainPrecision(x * lf);
-            _ = &ax;
-            var ay: f64 = if (ydefault != 0) -p.*.b else maintainPrecision(y * lf);
-            _ = &ay;
-            var az: f64 = maintainPrecision(z * lf);
-            _ = &az;
-            var pv: f64 = samplePerlin(p, ax, ay, az, yamp * lf, ymin * lf);
-            _ = &pv;
-            v += p.*.amplitude * pv;
-        }
+    var i: c_int = 0;
+    while (i < noise.*.octcnt) : (i += 1) {
+        const p: [*c]PerlinNoise = noise.*.octaves + @as(usize, @intCast(i));
+        const lf = p.*.lacunarity;
+        const ay = if (ydefault != 0) -p.*.b else maintainPrecision(y * lf);
+        v += p.*.amplitude * samplePerlin(p, maintainPrecision(x * lf), ay, maintainPrecision(z * lf), yamp * lf, ymin * lf);
     }
     return v;
 }
-pub fn sampleOctaveBeta17Biome(arg_noise: [*c]const OctaveNoise, arg_x: f64, arg_z: f64) f64 {
-    var noise = arg_noise;
-    _ = &noise;
-    var x = arg_x;
-    _ = &x;
-    var z = arg_z;
-    _ = &z;
+
+pub fn sampleOctaveBeta17Biome(noise: [*c]const OctaveNoise, x: f64, z: f64) f64 {
     var v: f64 = 0;
-    _ = &v;
-    var i: c_int = undefined;
-    _ = &i;
-    {
-        i = 0;
-        while (i < noise.*.octcnt) : (i += 1) {
-            var p: [*c]PerlinNoise = noise.*.octaves + @as(usize, @bitCast(@as(isize, @intCast(i))));
-            _ = &p;
-            var lf: f64 = p.*.lacunarity;
-            _ = &lf;
-            var ax: f64 = maintainPrecision(x * lf) + p.*.a;
-            _ = &ax;
-            var az: f64 = maintainPrecision(z * lf) + p.*.b;
-            _ = &az;
-            var pv: f64 = sampleSimplex2D(p, ax, az);
-            _ = &pv;
-            v += p.*.amplitude * pv;
-        }
+    var i: c_int = 0;
+    while (i < noise.*.octcnt) : (i += 1) {
+        const p: [*c]PerlinNoise = noise.*.octaves + @as(usize, @intCast(i));
+        const lf = p.*.lacunarity;
+        v += p.*.amplitude * sampleSimplex2D(p, maintainPrecision(x * lf) + p.*.a, maintainPrecision(z * lf) + p.*.b);
     }
     return v;
 }
@@ -1148,59 +1027,34 @@ pub fn xDoublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_xr: [*c]Xoroshiro
     noise.*.amplitude = amp_ini.static[@as(c_uint, @intCast(len))];
     return n;
 }
-pub fn sampleDoublePerlin(arg_noise: [*c]const DoublePerlinNoise, arg_x: f64, arg_y: f64, arg_z: f64) f64 {
-    var noise = arg_noise;
-    _ = &noise;
-    var x = arg_x;
-    _ = &x;
-    var y = arg_y;
-    _ = &y;
-    var z = arg_z;
-    _ = &z;
-    const f: f64 = 337.0 / 331.0;
-    _ = &f;
-    var v: f64 = 0;
-    _ = &v;
-    v += sampleOctave(&noise.*.octA, x, y, z);
-    v += sampleOctave(&noise.*.octB, x * f, y * f, z * f);
-    return v * noise.*.amplitude;
+pub fn sampleDoublePerlin(noise: [*c]const DoublePerlinNoise, x: f64, y: f64, z: f64) f64 {
+    const f = 337.0 / 331.0;
+    return (sampleOctave(&noise.*.octA, x, y, z) +
+        sampleOctave(&noise.*.octB, x * f, y * f, z * f)) * noise.*.amplitude;
 }
 // stderr is defined at top of file as null (error logging disabled in pure Zig builds)
 pub const fprintf = libc_shim.fprintf;
 pub const printf = libc_shim.printf;
-pub fn indexedLerp(arg_idx: u8, arg_a: f64, arg_b: f64, arg_c: f64) f64 {
-    var idx = arg_idx;
-    _ = &idx;
-    var a = arg_a;
-    _ = &a;
-    var b = arg_b;
-    _ = &b;
-    var c = arg_c;
-    _ = &c;
-    while (true) {
-        switch (@as(c_int, @bitCast(@as(c_uint, idx))) & @as(c_int, 15)) {
-            @as(c_int, 0) => return a + b,
-            @as(c_int, 1) => return -a + b,
-            @as(c_int, 2) => return a - b,
-            @as(c_int, 3) => return -a - b,
-            @as(c_int, 4) => return a + c,
-            @as(c_int, 5) => return -a + c,
-            @as(c_int, 6) => return a - c,
-            @as(c_int, 7) => return -a - c,
-            @as(c_int, 8) => return b + c,
-            @as(c_int, 9) => return -b + c,
-            @as(c_int, 10) => return b - c,
-            @as(c_int, 11) => return -b - c,
-            @as(c_int, 12) => return a + b,
-            @as(c_int, 13) => return -b + c,
-            @as(c_int, 14) => return -a + b,
-            @as(c_int, 15) => return -b - c,
-            else => {},
-        }
-        break;
-    }
-    __builtin_unreachable();
-    return 0;
+pub fn indexedLerp(idx: u8, a: f64, b: f64, cc: f64) f64 {
+    return switch (idx & 0xf) {
+        0 => a + b,
+        1 => -a + b,
+        2 => a - b,
+        3 => -a - b,
+        4 => a + cc,
+        5 => -a + cc,
+        6 => a - cc,
+        7 => -a - cc,
+        8 => b + cc,
+        9 => -b + cc,
+        10 => b - cc,
+        11 => -b - cc,
+        12 => a + b,
+        13 => -b + cc,
+        14 => -a + b,
+        15 => -b - cc,
+        else => unreachable,
+    };
 }
 pub fn samplePerlinBeta17Terrain(arg_noise: [*c]const PerlinNoise, arg_v: [*c]f64, arg_d1: f64, arg_d3: f64, arg_yLacAmp: f64) void {
     var noise = arg_noise;
@@ -2033,90 +1887,48 @@ pub fn getVoronoiSHA(arg_seed: u64) u64 {
     a1 +%= B.static[@as(c_uint, @intCast(@as(c_int, 1)))];
     return @as(u64, @bitCast(@as(c_ulong, __builtin_bswap32(a0)))) | (@as(u64, @bitCast(@as(c_ulong, __builtin_bswap32(a1)))) << @intCast(32));
 }
-pub fn voronoiAccess3D(arg_sha: u64, arg_x: c_int, arg_y: c_int, arg_z: c_int, arg_x4: [*c]c_int, arg_y4: [*c]c_int, arg_z4: [*c]c_int) void {
-    var sha = arg_sha;
-    _ = &sha;
-    var x = arg_x;
-    _ = &x;
-    var y = arg_y;
-    _ = &y;
-    var z = arg_z;
-    _ = &z;
-    var x4 = arg_x4;
-    _ = &x4;
-    var y4 = arg_y4;
-    _ = &y4;
-    var z4 = arg_z4;
-    _ = &z4;
-    x -= @as(c_int, 2);
-    y -= @as(c_int, 2);
-    z -= @as(c_int, 2);
-    var pX: c_int = x >> @intCast(2);
-    _ = &pX;
-    var pY: c_int = y >> @intCast(2);
-    _ = &pY;
-    var pZ: c_int = z >> @intCast(2);
-    _ = &pZ;
-    var dx: c_int = (x & @as(c_int, 3)) * @as(c_int, 10240);
-    _ = &dx;
-    var dy: c_int = (y & @as(c_int, 3)) * @as(c_int, 10240);
-    _ = &dy;
-    var dz: c_int = (z & @as(c_int, 3)) * @as(c_int, 10240);
-    _ = &dz;
+pub fn voronoiAccess3D(sha: u64, arg_x: c_int, arg_y: c_int, arg_z: c_int, x4: [*c]c_int, y4: [*c]c_int, z4: [*c]c_int) void {
+    const x = arg_x - 2;
+    const y = arg_y - 2;
+    const z = arg_z - 2;
+    const pX = x >> @intCast(2);
+    const pY = y >> @intCast(2);
+    const pZ = z >> @intCast(2);
+    const dx = (x & 3) * 10240;
+    const dy = (y & 3) * 10240;
+    const dz = (z & 3) * 10240;
     var ax: c_int = 0;
-    _ = &ax;
     var ay: c_int = 0;
-    _ = &ay;
     var az: c_int = 0;
-    _ = &az;
-    var dmin: u64 = @as(u64, @bitCast(@as(c_long, -@as(c_int, 1))));
-    _ = &dmin;
-    var i: c_int = undefined;
-    _ = &i;
-    {
-        i = 0;
-        while (i < @as(c_int, 8)) : (i += 1) {
-            var bx: c_int = @intFromBool((i & @as(c_int, 4)) != @as(c_int, 0));
-            _ = &bx;
-            var by: c_int = @intFromBool((i & @as(c_int, 2)) != @as(c_int, 0));
-            _ = &by;
-            var bz: c_int = @intFromBool((i & @as(c_int, 1)) != @as(c_int, 0));
-            _ = &bz;
-            var cx: c_int = pX + bx;
-            _ = &cx;
-            var cy: c_int = pY + by;
-            _ = &cy;
-            var cz: c_int = pZ + bz;
-            _ = &cz;
-            var rx: c_int = undefined;
-            _ = &rx;
-            var ry: c_int = undefined;
-            _ = &ry;
-            var rz: c_int = undefined;
-            _ = &rz;
-            getVoronoiCell(sha, cx, cy, cz, &rx, &ry, &rz);
-            rx += dx - ((@as(c_int, 40) * @as(c_int, 1024)) * bx);
-            ry += dy - ((@as(c_int, 40) * @as(c_int, 1024)) * by);
-            rz += dz - ((@as(c_int, 40) * @as(c_int, 1024)) * bz);
-            var d: u64 = ((@as(u64, @bitCast(@as(c_long, rx))) *% @as(u64, @bitCast(@as(c_long, rx)))) +% (@as(u64, @bitCast(@as(c_long, ry))) *% @as(u64, @bitCast(@as(c_long, ry))))) +% (@as(u64, @bitCast(@as(c_long, rz))) *% @as(u64, @bitCast(@as(c_long, rz))));
-            _ = &d;
-            if (d < dmin) {
-                dmin = d;
-                ax = cx;
-                ay = cy;
-                az = cz;
-            }
+    var dmin: u64 = @bitCast(@as(i64, -1));
+    for (0..8) |i| {
+        const bx: c_int = @intFromBool(i & 4 != 0);
+        const by: c_int = @intFromBool(i & 2 != 0);
+        const bz: c_int = @intFromBool(i & 1 != 0);
+        const cx = pX + bx;
+        const cy = pY + by;
+        const cz = pZ + bz;
+        var rx: c_int = undefined;
+        var ry: c_int = undefined;
+        var rz: c_int = undefined;
+        getVoronoiCell(sha, cx, cy, cz, &rx, &ry, &rz);
+        rx += dx - (40 * 1024 * bx);
+        ry += dy - (40 * 1024 * by);
+        rz += dz - (40 * 1024 * bz);
+        const rxu: u64 = @bitCast(@as(i64, rx));
+        const ryu: u64 = @bitCast(@as(i64, ry));
+        const rzu: u64 = @bitCast(@as(i64, rz));
+        const d = (rxu *% rxu) +% (ryu *% ryu) +% (rzu *% rzu);
+        if (d < dmin) {
+            dmin = d;
+            ax = cx;
+            ay = cy;
+            az = cz;
         }
     }
-    if (x4 != null) {
-        x4.* = ax;
-    }
-    if (y4 != null) {
-        y4.* = ay;
-    }
-    if (z4 != null) {
-        z4.* = az;
-    }
+    if (x4 != null) x4.* = ax;
+    if (y4 != null) y4.* = ay;
+    if (z4 != null) z4.* = az;
 }
 
 pub fn mapVoronoiPlane(_: u64, out: [*c]c_int, src: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int, _: c_int, _: c_int, _: c_int, _: c_int, _: c_int) void {
@@ -2191,34 +2003,23 @@ pub const oldBiomes11: [6]c_int = [6]c_int{
     plains,
     taiga,
 };
-pub fn getVoronoiCell(arg_sha: u64, arg_a: c_int, arg_b: c_int, arg_c: c_int, arg_x: [*c]c_int, arg_y: [*c]c_int, arg_z: [*c]c_int) void {
-    var sha = arg_sha;
-    _ = &sha;
-    var a = arg_a;
-    _ = &a;
-    var b = arg_b;
-    _ = &b;
-    var c = arg_c;
-    _ = &c;
-    var x = arg_x;
-    _ = &x;
-    var y = arg_y;
-    _ = &y;
-    var z = arg_z;
-    _ = &z;
-    var s: u64 = sha;
-    _ = &s;
-    s = mcStepSeed(s, @as(u64, @bitCast(@as(c_long, a))));
-    s = mcStepSeed(s, @as(u64, @bitCast(@as(c_long, b))));
-    s = mcStepSeed(s, @as(u64, @bitCast(@as(c_long, c))));
-    s = mcStepSeed(s, @as(u64, @bitCast(@as(c_long, a))));
-    s = mcStepSeed(s, @as(u64, @bitCast(@as(c_long, b))));
-    s = mcStepSeed(s, @as(u64, @bitCast(@as(c_long, c))));
-    x.* = @as(c_int, @bitCast(@as(c_uint, @truncate((((s >> @intCast(24)) & @as(u64, @bitCast(@as(c_long, @as(c_int, 1023))))) -% @as(u64, @bitCast(@as(c_long, @as(c_int, 512))))) *% @as(u64, @bitCast(@as(c_long, @as(c_int, 36))))))));
-    s = mcStepSeed(s, sha);
-    y.* = @as(c_int, @bitCast(@as(c_uint, @truncate((((s >> @intCast(24)) & @as(u64, @bitCast(@as(c_long, @as(c_int, 1023))))) -% @as(u64, @bitCast(@as(c_long, @as(c_int, 512))))) *% @as(u64, @bitCast(@as(c_long, @as(c_int, 36))))))));
-    s = mcStepSeed(s, sha);
-    z.* = @as(c_int, @bitCast(@as(c_uint, @truncate((((s >> @intCast(24)) & @as(u64, @bitCast(@as(c_long, @as(c_int, 1023))))) -% @as(u64, @bitCast(@as(c_long, @as(c_int, 512))))) *% @as(u64, @bitCast(@as(c_long, @as(c_int, 36))))))));
+pub fn getVoronoiCell(sha: u64, a: c_int, b: c_int, cc: c_int, x: [*c]c_int, y: [*c]c_int, z: [*c]c_int) void {
+    const a_u: u64 = @bitCast(@as(i64, a));
+    const b_u: u64 = @bitCast(@as(i64, b));
+    const c_u: u64 = @bitCast(@as(i64, cc));
+    var s = mcStepSeed(mcStepSeed(mcStepSeed(mcStepSeed(mcStepSeed(mcStepSeed(sha, a_u), b_u), c_u), a_u), b_u), c_u);
+
+    const voronoi_coord = struct {
+        fn f(seed: *u64, sha_: u64) c_int {
+            const raw: u64 = ((seed.* >> 24) & 1023) -% 512;
+            seed.* = mcStepSeed(seed.*, sha_);
+            return @as(c_int, @bitCast(@as(c_uint, @truncate(raw *% 36))));
+        }
+    }.f;
+
+    x.* = voronoi_coord(&s, sha);
+    y.* = voronoi_coord(&s, sha);
+    z.* = voronoi_coord(&s, sha);
 }
 pub const struct_Range = extern struct {
     scale: c_int = @import("std").mem.zeroes(c_int),
