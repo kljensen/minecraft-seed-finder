@@ -49,19 +49,27 @@ pub fn next(seed: [*c]u64, bits: c_int) c_int {
     return @as(c_int, @truncate(@as(i64, @bitCast(seed.*)) >> @intCast(48 - bits)));
 }
 
+inline fn javaNextIntAccept(bits: u32, val: u32, mask: u32) bool {
+    // Mirrors Java's: if (bits - val + mask >= 0)
+    // using wrapping 32-bit arithmetic and signed comparison.
+    return @as(i32, @bitCast(bits -% val +% mask)) >= 0;
+}
+
 pub fn nextInt(seed: [*c]u64, n: c_int) c_int {
-    const m = n - 1;
-    if ((m & n) == 0) {
+    const bound: u32 = @bitCast(n);
+    const mask: u32 = bound -% 1;
+    if ((mask & bound) == 0) {
         // n is a power of 2
-        const x = @as(u64, @bitCast(@as(i64, n))) *% @as(u64, @bitCast(@as(i64, next(seed, 31))));
-        return @as(c_int, @truncate(@as(i64, @bitCast(x)) >> 31));
+        const bits31: u32 = @bitCast(next(seed, 31));
+        const product = @as(u64, bound) *% @as(u64, bits31);
+        return @as(c_int, @bitCast(@as(u32, @truncate(product >> 31))));
     }
-    // Rejection sampling to avoid modulo bias
+
+    // Rejection sampling to avoid modulo bias.
     while (true) {
-        const bits = next(seed, 31);
-        const val = @import("std").zig.c_translation.signedRemainder(bits, n);
-        if (@as(i32, @bitCast(@as(u32, @bitCast(bits)) -% @as(u32, @bitCast(val)) +% @as(u32, @bitCast(m)))) >= 0)
-            return val;
+        const bits: u32 = @bitCast(next(seed, 31));
+        const val = bits % bound;
+        if (javaNextIntAccept(bits, val, mask)) return @as(c_int, @bitCast(val));
     }
 }
 
@@ -163,18 +171,18 @@ pub fn xNextLongJ(xr: [*c]Xoroshiro) u64 {
     return (@as(u64, @bitCast(@as(i64, @as(i32, @bitCast(a))))) << 32) +% @as(u64, @bitCast(@as(i64, @as(i32, @bitCast(b)))));
 }
 pub fn xNextIntJ(xr: [*c]Xoroshiro, n: u32) c_int {
-    // Java-style nextInt: rejection sampling with 31-bit values from xoroshiro
-    const m: u32 = n -% 1;
-    if ((m & n) == 0) {
+    // Java-style nextInt: rejection sampling with 31-bit values from xoroshiro.
+    const mask: u32 = n -% 1;
+    if ((mask & n) == 0) {
         // n is a power of 2
-        const x = @as(u64, n) *% (xNextLong(xr) >> 33);
-        return @as(c_int, @truncate(@as(i64, @bitCast(x)) >> 31));
+        const product = @as(u64, n) *% (xNextLong(xr) >> 33);
+        return @as(c_int, @bitCast(@as(u32, @truncate(product >> 31))));
     }
+
     while (true) {
         const bits: u32 = @truncate(xNextLong(xr) >> 33);
         const val = bits % n;
-        if (@as(i32, @bitCast(bits -% val +% m)) >= 0)
-            return @as(c_int, @bitCast(val));
+        if (javaNextIntAccept(bits, val, mask)) return @as(c_int, @bitCast(val));
     }
 }
 pub fn mcStepSeed(s: u64, salt: u64) u64 {
