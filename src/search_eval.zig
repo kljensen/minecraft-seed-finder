@@ -230,6 +230,7 @@ pub fn fastBiomeIdWithFeasibility(g: *c.Generator, x: i32, z: i32, bounds: Biome
 
     const h_val = @as(f32, @floatCast(c.sampleDoublePerlin(&bn.climate[h_idx], px, 0.0, pz)));
     np[h_idx] = @as(i64, @intFromFloat(10000.0 * h_val));
+    if (!isDimFeasible(bounds, h_idx, np[h_idx])) return c.none;
 
     return c.climateToBiome(bn.mc, @ptrCast(@alignCast(&np)), null);
 }
