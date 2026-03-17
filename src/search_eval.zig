@@ -1323,6 +1323,61 @@ pub fn anyStructureWithinRadius(g: *c.Generator, seed: u64, mc: i32, center: c.P
 const MAX_COMBINED_BIOMES = 8;
 const MAX_BIOME_CACHE_POINTS: usize = 65536;
 
+fn storeCombinedBiomeThresholdStates(
+    biome_reqs: []const *const BiomeReq,
+    biome_eval_indices: []const usize,
+    evals: []EvalState,
+    eval_epoch: u64,
+    counts: ?[]const i32,
+    force_all_matched: bool,
+) void {
+    for (biome_reqs, biome_eval_indices, 0..) |req, eval_idx, bi| {
+        const matched = if (force_all_matched)
+            true
+        else blk: {
+            const count_slice = counts orelse unreachable;
+            break :blk count_slice[bi] >= req.min_count;
+        };
+        evals[eval_idx] = .{
+            .epoch = eval_epoch,
+            .computed = true,
+            .finalized = false,
+            .matched = matched,
+            .count = if (matched) req.min_count else 0,
+            .best_dist2 = std.math.maxInt(i64),
+        };
+    }
+}
+
+fn propagateCombinedBiomeAliases(
+    biome_atom_indices: []const usize,
+    aliases: []const usize,
+    evals: []EvalState,
+    eval_epoch: u64,
+) void {
+    for (biome_atom_indices) |idx| {
+        const alias_idx = aliases[idx];
+        if (alias_idx != idx and evals[alias_idx].epoch == eval_epoch and evals[alias_idx].computed) {
+            evals[idx] = evals[alias_idx];
+        }
+    }
+}
+
+fn finalizeCombinedBiomeThreshold(
+    biome_atom_indices: []const usize,
+    aliases: []const usize,
+    evals: []EvalState,
+    eval_epoch: u64,
+    unique_biome_count: usize,
+    biome_start: i128,
+) void {
+    propagateCombinedBiomeAliases(biome_atom_indices, aliases, evals, eval_epoch);
+    if (active_eval_telemetry) |telemetry| {
+        telemetry.biome_constraint_evals +%= @as(u64, @intCast(unique_biome_count));
+        telemetry.biome_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - biome_start));
+    }
+}
+
 /// Cached sequential biome threshold: evaluates biome constraints sequentially
 /// (preserving short-circuit) but caches biome_ids so subsequent biome scans
 /// reuse noise computation from earlier scans. Each scan uses per-biome climate
@@ -1336,8 +1391,6 @@ fn combinedBiomeThreshold(
     evals: []EvalState,
     eval_epoch: u64,
 ) ?bool {
-    const n_atoms = biome_atom_indices.len;
-
     // Collect unique biome reqs, dedup by alias
     var biome_reqs: [MAX_COMBINED_BIOMES]*const BiomeReq = undefined;
     var biome_eval_indices: [MAX_COMBINED_BIOMES]usize = undefined;
@@ -1429,51 +1482,27 @@ fn combinedBiomeThreshold(
         }
         if (any_zero) {
             // At least one biome has zero coarse hits → reject
-            for (0..n) |bi| {
-                evals[biome_eval_indices[bi]] = .{
-                    .epoch = eval_epoch,
-                    .computed = true,
-                    .finalized = false,
-                    .matched = coarse_counts[bi] >= biome_reqs[bi].min_count,
-                    .count = if (coarse_counts[bi] >= biome_reqs[bi].min_count) biome_reqs[bi].min_count else 0,
-                    .best_dist2 = std.math.maxInt(i64),
-                };
-            }
-            for (0..n_atoms) |ai| {
-                const idx = biome_atom_indices[ai];
-                const alias_idx = aliases[idx];
-                if (alias_idx != idx and evals[alias_idx].epoch == eval_epoch and evals[alias_idx].computed) {
-                    evals[idx] = evals[alias_idx];
-                }
-            }
-            if (active_eval_telemetry) |telemetry| {
-                telemetry.biome_constraint_evals +%= @as(u64, @intCast(n));
-                telemetry.biome_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - biome_start));
-            }
+            storeCombinedBiomeThresholdStates(
+                biome_reqs[0..n],
+                biome_eval_indices[0..n],
+                evals,
+                eval_epoch,
+                coarse_counts[0..n],
+                false,
+            );
+            finalizeCombinedBiomeThreshold(biome_atom_indices, aliases, evals, eval_epoch, n, biome_start);
             return false;
         }
         if (all_satisfied) {
-            for (0..n) |bi| {
-                evals[biome_eval_indices[bi]] = .{
-                    .epoch = eval_epoch,
-                    .computed = true,
-                    .finalized = false,
-                    .matched = true,
-                    .count = biome_reqs[bi].min_count,
-                    .best_dist2 = std.math.maxInt(i64),
-                };
-            }
-            for (0..n_atoms) |ai| {
-                const idx = biome_atom_indices[ai];
-                const alias_idx = aliases[idx];
-                if (alias_idx != idx and evals[alias_idx].epoch == eval_epoch and evals[alias_idx].computed) {
-                    evals[idx] = evals[alias_idx];
-                }
-            }
-            if (active_eval_telemetry) |telemetry| {
-                telemetry.biome_constraint_evals +%= @as(u64, @intCast(n));
-                telemetry.biome_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - biome_start));
-            }
+            storeCombinedBiomeThresholdStates(
+                biome_reqs[0..n],
+                biome_eval_indices[0..n],
+                evals,
+                eval_epoch,
+                null,
+                true,
+            );
+            finalizeCombinedBiomeThreshold(biome_atom_indices, aliases, evals, eval_epoch, n, biome_start);
             return true;
         }
         // Uncertain: fall through to full-resolution evaluation
@@ -1556,20 +1585,7 @@ fn combinedBiomeThreshold(
         }
     }
 
-    // Propagate aliases
-    for (0..n_atoms) |ai| {
-        const idx = biome_atom_indices[ai];
-        const alias_idx = aliases[idx];
-        if (alias_idx != idx and evals[alias_idx].epoch == eval_epoch and evals[alias_idx].computed) {
-            evals[idx] = evals[alias_idx];
-        }
-    }
-
-    if (active_eval_telemetry) |telemetry| {
-        telemetry.biome_constraint_evals +%= @as(u64, @intCast(n));
-        telemetry.biome_eval_ns +%= @as(u128, @intCast(std.time.nanoTimestamp() - biome_start));
-    }
-
+    finalizeCombinedBiomeThreshold(biome_atom_indices, aliases, evals, eval_epoch, n, biome_start);
     return all_matched;
 }
 
