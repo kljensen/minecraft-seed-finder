@@ -49,204 +49,149 @@ pub inline fn floordiv(arg_a: i32, arg_b: i32) i32 {
     _ = &r;
     return q - @intFromBool(((a ^ b) < @as(c_int, 0)) and !!(r != 0));
 }
-pub fn setSeed(arg_seed: [*c]u64, arg_value: u64) void {
-    var seed = arg_seed;
-    _ = &seed;
-    var value = arg_value;
-    _ = &value;
-    seed.* = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, @bitCast(@as(c_ulonglong, value ^ @as(u64, @bitCast(@as(c_long, 25214903917)))))) & ((@as(c_ulonglong, 1) << @intCast(48)) -% @as(c_ulonglong, @bitCast(@as(c_longlong, @as(c_int, 1)))))))));
+// ---------------------------------------------------------------------------
+// Java LCG random number generator
+// ---------------------------------------------------------------------------
+const lcg_multiplier: u64 = 25214903917;
+const lcg_addend: u64 = 11;
+const lcg_mask: u64 = (1 << 48) - 1;
+
+pub fn setSeed(seed: [*c]u64, value: u64) void {
+    seed.* = (value ^ lcg_multiplier) & lcg_mask;
 }
-pub fn next(arg_seed: [*c]u64, bits: c_int) c_int {
-    var seed = arg_seed;
-    _ = &seed;
-    _ = &bits;
-    seed.* = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, @bitCast(@as(c_ulonglong, (seed.* *% @as(u64, @bitCast(@as(c_long, 25214903917)))) +% @as(u64, @bitCast(@as(c_long, @as(c_int, 11))))))) & ((@as(c_ulonglong, 1) << @intCast(48)) -% @as(c_ulonglong, @bitCast(@as(c_longlong, @as(c_int, 1)))))))));
-    return @as(c_int, @bitCast(@as(c_int, @truncate(@as(i64, @bitCast(seed.*)) >> @intCast(@as(c_int, 48) - bits)))));
+
+pub fn next(seed: [*c]u64, bits: c_int) c_int {
+    seed.* = (seed.* *% lcg_multiplier +% lcg_addend) & lcg_mask;
+    return @as(c_int, @truncate(@as(i64, @bitCast(seed.*)) >> @intCast(48 - bits)));
 }
-pub fn nextInt(arg_seed: [*c]u64, n: c_int) c_int {
-    var seed = arg_seed;
-    _ = &seed;
-    _ = &n;
-    var bits: c_int = undefined;
-    _ = &bits;
-    var val: c_int = undefined;
-    _ = &val;
-    const m: c_int = n - @as(c_int, 1);
-    _ = &m;
-    if ((m & n) == @as(c_int, 0)) {
-        var x: u64 = @as(u64, @bitCast(@as(c_long, n))) *% @as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 31)))));
-        _ = &x;
-        return @as(c_int, @bitCast(@as(c_int, @truncate(@as(i64, @bitCast(x)) >> @intCast(31)))));
+
+pub fn nextInt(seed: [*c]u64, n: c_int) c_int {
+    const m = n - 1;
+    if ((m & n) == 0) {
+        // n is a power of 2
+        const x = @as(u64, @bitCast(@as(i64, n))) *% @as(u64, @bitCast(@as(i64, next(seed, 31))));
+        return @as(c_int, @truncate(@as(i64, @bitCast(x)) >> 31));
     }
+    // Rejection sampling to avoid modulo bias
     while (true) {
-        bits = next(seed, @as(c_int, 31));
-        val = @import("std").zig.c_translation.signedRemainder(bits, n);
-        if (!(@as(i32, @bitCast((@as(u32, @bitCast(bits)) -% @as(u32, @bitCast(val))) +% @as(u32, @bitCast(m)))) < @as(c_int, 0))) break;
+        const bits = next(seed, 31);
+        const val = @import("std").zig.c_translation.signedRemainder(bits, n);
+        if (@as(i32, @bitCast(@as(u32, @bitCast(bits)) -% @as(u32, @bitCast(val)) +% @as(u32, @bitCast(m)))) >= 0)
+            return val;
     }
-    return val;
 }
-pub fn nextLong(arg_seed: [*c]u64) u64 {
-    var seed = arg_seed;
-    _ = &seed;
-    return (@as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 32))))) << @intCast(32)) +% @as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 32)))));
+
+pub fn nextLong(seed: [*c]u64) u64 {
+    return (@as(u64, @bitCast(@as(i64, next(seed, 32)))) << 32) +% @as(u64, @bitCast(@as(i64, next(seed, 32))));
 }
-pub fn nextFloat(arg_seed: [*c]u64) f32 {
-    var seed = arg_seed;
-    _ = &seed;
-    return @as(f32, @floatFromInt(next(seed, @as(c_int, 24)))) / @as(f32, @floatFromInt(@as(c_int, 1) << @intCast(24)));
+
+pub fn nextFloat(seed: [*c]u64) f32 {
+    return @as(f32, @floatFromInt(next(seed, 24))) / @as(f32, 1 << 24);
 }
-pub fn nextDouble(arg_seed: [*c]u64) f64 {
-    var seed = arg_seed;
-    _ = &seed;
-    var x: u64 = @as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 26)))));
-    _ = &x;
-    x <<= @intCast(@as(c_int, 27));
-    x +%= @as(u64, @bitCast(@as(c_long, next(seed, @as(c_int, 27)))));
-    return @as(f64, @floatFromInt(@as(i64, @bitCast(x)))) / @as(f64, @floatFromInt(@as(c_ulonglong, 1) << @intCast(53)));
+
+pub fn nextDouble(seed: [*c]u64) f64 {
+    var x = @as(u64, @bitCast(@as(i64, next(seed, 26))));
+    x = (x << 27) +% @as(u64, @bitCast(@as(i64, next(seed, 27))));
+    return @as(f64, @floatFromInt(@as(i64, @bitCast(x)))) / @as(f64, @floatFromInt(@as(u64, 1) << 53));
 }
-pub fn skipNextN(arg_seed: [*c]u64, arg_n: u64) void {
-    var seed = arg_seed;
-    _ = &seed;
-    var n = arg_n;
-    _ = &n;
+
+pub fn skipNextN(seed: [*c]u64, n: u64) void {
     var m: u64 = 1;
-    _ = &m;
     var a: u64 = 0;
-    _ = &a;
-    var im: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, 25214903917)))));
-    _ = &im;
-    var ia: u64 = 11;
-    _ = &ia;
-    var k: u64 = undefined;
-    _ = &k;
-    {
-        k = n;
-        while (k != 0) : (k >>= @intCast(@as(c_int, 1))) {
-            if ((k & @as(u64, @bitCast(@as(c_long, @as(c_int, 1))))) != 0) {
-                m *%= im;
-                a = (im *% a) +% ia;
-            }
-            ia = (im +% @as(u64, @bitCast(@as(c_long, @as(c_int, 1))))) *% ia;
-            im *%= im;
+    var im: u64 = lcg_multiplier;
+    var ia: u64 = lcg_addend;
+    var k = n;
+    while (k != 0) : (k >>= 1) {
+        if ((k & 1) != 0) {
+            m *%= im;
+            a = (im *% a) +% ia;
         }
+        ia = (im +% 1) *% ia;
+        im *%= im;
     }
-    seed.* = (seed.* *% m) +% a;
-    seed.* &= @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, 281474976710655)))));
+    seed.* = (seed.* *% m +% a) & lcg_mask;
 }
 pub const struct_Xoroshiro = extern struct {
     lo: u64 = @import("std").mem.zeroes(u64),
     hi: u64 = @import("std").mem.zeroes(u64),
 };
 pub const Xoroshiro = struct_Xoroshiro;
-pub fn xSetSeed(arg_xr: [*c]Xoroshiro, arg_value: u64) void {
-    var xr = arg_xr;
-    _ = &xr;
-    var value = arg_value;
-    _ = &value;
-    const XL: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, 11400714819323198485)))));
-    _ = &XL;
-    const XH: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, 7640891576956012809)))));
-    _ = &XH;
-    const A: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, 13787848793156543929)))));
-    _ = &A;
-    const B: u64 = @as(u64, @bitCast(@as(c_ulong, @truncate(@as(c_ulonglong, 10723151780598845931)))));
-    _ = &B;
-    var l: u64 = value ^ XH;
-    _ = &l;
-    var h: u64 = l +% XL;
-    _ = &h;
-    l = (l ^ (l >> @intCast(30))) *% A;
-    h = (h ^ (h >> @intCast(30))) *% A;
-    l = (l ^ (l >> @intCast(27))) *% B;
-    h = (h ^ (h >> @intCast(27))) *% B;
-    l = l ^ (l >> @intCast(31));
-    h = h ^ (h >> @intCast(31));
-    xr.*.lo = l;
-    xr.*.hi = h;
+// ---------------------------------------------------------------------------
+// Xoroshiro128++ random number generator (used by MC >= 1.18)
+// ---------------------------------------------------------------------------
+
+pub fn xSetSeed(xr: [*c]Xoroshiro, value: u64) void {
+    // stafford_mix13 variant (splitmix64) to derive two state words
+    const XL: u64 = 11400714819323198485;
+    const XH: u64 = 7640891576956012809;
+    const A: u64 = 13787848793156543929;
+    const B: u64 = 10723151780598845931;
+    var l = value ^ XH;
+    var h = l +% XL;
+    l = (l ^ (l >> 30)) *% A;
+    h = (h ^ (h >> 30)) *% A;
+    l = (l ^ (l >> 27)) *% B;
+    h = (h ^ (h >> 27)) *% B;
+    xr.*.lo = l ^ (l >> 31);
+    xr.*.hi = h ^ (h >> 31);
 }
-pub fn xNextLong(arg_xr: [*c]Xoroshiro) u64 {
-    var xr = arg_xr;
-    _ = &xr;
-    var l: u64 = xr.*.lo;
-    _ = &l;
-    var h: u64 = xr.*.hi;
-    _ = &h;
-    var n: u64 = rotl64(l +% h, @as(u8, @bitCast(@as(i8, @truncate(@as(c_int, 17)))))) +% l;
-    _ = &n;
+
+pub fn xNextLong(xr: [*c]Xoroshiro) u64 {
+    const l = xr.*.lo;
+    var h = xr.*.hi;
+    const n = rotl64(l +% h, 17) +% l;
     h ^= l;
-    xr.*.lo = (rotl64(l, @as(u8, @bitCast(@as(i8, @truncate(@as(c_int, 49)))))) ^ h) ^ (h << @intCast(21));
-    xr.*.hi = rotl64(h, @as(u8, @bitCast(@as(i8, @truncate(@as(c_int, 28))))));
+    xr.*.lo = rotl64(l, 49) ^ h ^ (h << 21);
+    xr.*.hi = rotl64(h, 28);
     return n;
 }
-pub fn xNextInt(arg_xr: [*c]Xoroshiro, arg_n: u32) c_int {
-    var xr = arg_xr;
-    _ = &xr;
-    var n = arg_n;
-    _ = &n;
-    var r: u64 = (xNextLong(xr) & @as(u64, @bitCast(@as(c_ulong, @as(c_uint, 4294967295))))) *% @as(u64, @bitCast(@as(c_ulong, n)));
-    _ = &r;
-    if (@as(u32, @bitCast(@as(c_uint, @truncate(r)))) < n) {
-        while (@as(u32, @bitCast(@as(c_uint, @truncate(r)))) < ((~n +% @as(u32, @bitCast(@as(c_int, 1)))) % n)) {
-            r = (xNextLong(xr) & @as(u64, @bitCast(@as(c_ulong, @as(c_uint, 4294967295))))) *% @as(u64, @bitCast(@as(c_ulong, n)));
+
+pub fn xNextInt(xr: [*c]Xoroshiro, n: u32) c_int {
+    // Lemire's nearly divisionless method
+    var r = (xNextLong(xr) & 0xFFFFFFFF) *% @as(u64, n);
+    if (@as(u32, @truncate(r)) < n) {
+        const threshold = (~n +% 1) % n; // == (-n) % n
+        while (@as(u32, @truncate(r)) < threshold) {
+            r = (xNextLong(xr) & 0xFFFFFFFF) *% @as(u64, n);
         }
     }
-    return @as(c_int, @bitCast(@as(c_uint, @truncate(r >> @intCast(32)))));
+    return @as(c_int, @bitCast(@as(u32, @truncate(r >> 32))));
 }
-pub fn xNextDouble(arg_xr: [*c]Xoroshiro) f64 {
-    var xr = arg_xr;
-    _ = &xr;
-    return @as(f64, @floatFromInt(xNextLong(xr) >> @intCast(@as(c_int, 64) - @as(c_int, 53)))) * 0.00000000000000011102230246251565;
+
+pub fn xNextDouble(xr: [*c]Xoroshiro) f64 {
+    return @as(f64, @floatFromInt(xNextLong(xr) >> 11)) * 1.1102230246251565e-16;
 }
-pub fn xNextFloat(arg_xr: [*c]Xoroshiro) f32 {
-    var xr = arg_xr;
-    _ = &xr;
-    return @as(f32, @floatFromInt(xNextLong(xr) >> @intCast(@as(c_int, 64) - @as(c_int, 24)))) * 0.00000005960464477539063;
+
+pub fn xNextFloat(xr: [*c]Xoroshiro) f32 {
+    return @as(f32, @floatFromInt(xNextLong(xr) >> 40)) * 5.9604644775390625e-8;
 }
-pub fn xSkipN(arg_xr: [*c]Xoroshiro, arg_count: c_int) void {
-    var xr = arg_xr;
-    _ = &xr;
-    var count = arg_count;
-    _ = &count;
-    while ((blk: {
-        const ref = &count;
-        const tmp = ref.*;
-        ref.* -= 1;
-        break :blk tmp;
-    }) > @as(c_int, 0)) {
+
+pub fn xSkipN(xr: [*c]Xoroshiro, count_arg: c_int) void {
+    var count = count_arg;
+    while (count > 0) : (count -= 1) {
         _ = xNextLong(xr);
     }
 }
-pub fn xNextLongJ(arg_xr: [*c]Xoroshiro) u64 {
-    var xr = arg_xr;
-    _ = &xr;
-    var a: i32 = @as(i32, @bitCast(@as(c_uint, @truncate(xNextLong(xr) >> @intCast(32)))));
-    _ = &a;
-    var b: i32 = @as(i32, @bitCast(@as(c_uint, @truncate(xNextLong(xr) >> @intCast(32)))));
-    _ = &b;
-    return (@as(u64, @bitCast(@as(c_long, a))) << @intCast(32)) +% @as(u64, @bitCast(@as(c_long, b)));
+
+pub fn xNextLongJ(xr: [*c]Xoroshiro) u64 {
+    const a: u32 = @truncate(xNextLong(xr) >> 32);
+    const b: u32 = @truncate(xNextLong(xr) >> 32);
+    return (@as(u64, @bitCast(@as(i64, @as(i32, @bitCast(a))))) << 32) +% @as(u64, @bitCast(@as(i64, @as(i32, @bitCast(b)))));
 }
-pub fn xNextIntJ(arg_xr: [*c]Xoroshiro, arg_n: u32) c_int {
-    var xr = arg_xr;
-    _ = &xr;
-    var n = arg_n;
-    _ = &n;
-    var bits: c_int = undefined;
-    _ = &bits;
-    var val: c_int = undefined;
-    _ = &val;
-    const m: c_int = @as(c_int, @bitCast(n -% @as(u32, @bitCast(@as(c_int, 1)))));
-    _ = &m;
-    if ((@as(u32, @bitCast(m)) & n) == @as(u32, @bitCast(@as(c_int, 0)))) {
-        var x: u64 = @as(u64, @bitCast(@as(c_ulong, n))) *% (xNextLong(xr) >> @intCast(33));
-        _ = &x;
-        return @as(c_int, @bitCast(@as(c_int, @truncate(@as(i64, @bitCast(x)) >> @intCast(31)))));
+pub fn xNextIntJ(xr: [*c]Xoroshiro, n: u32) c_int {
+    // Java-style nextInt: rejection sampling with 31-bit values from xoroshiro
+    const m: u32 = n -% 1;
+    if ((m & n) == 0) {
+        // n is a power of 2
+        const x = @as(u64, n) *% (xNextLong(xr) >> 33);
+        return @as(c_int, @truncate(@as(i64, @bitCast(x)) >> 31));
     }
     while (true) {
-        bits = @as(c_int, @bitCast(@as(c_uint, @truncate(xNextLong(xr) >> @intCast(33)))));
-        val = @as(c_int, @bitCast(@as(u32, @bitCast(bits)) % n));
-        if (!(@as(i32, @bitCast((@as(u32, @bitCast(bits)) -% @as(u32, @bitCast(val))) +% @as(u32, @bitCast(m)))) < @as(c_int, 0))) break;
+        const bits: u32 = @truncate(xNextLong(xr) >> 33);
+        const val = bits % n;
+        if (@as(i32, @bitCast(bits -% val +% m)) >= 0)
+            return @as(c_int, @bitCast(val));
     }
-    return val;
 }
 pub fn mcStepSeed(s: u64, salt: u64) u64 {
     return s *% (s *% 6364136223846793005 +% 1442695040888963407) +% salt;
@@ -315,115 +260,66 @@ pub const DoublePerlinNoise = struct_DoublePerlinNoise;
 pub fn maintainPrecision(x: f64) f64 {
     return x;
 }
-pub fn perlinInit(arg_noise: [*c]PerlinNoise, arg_seed: [*c]u64) void {
-    var noise = arg_noise;
-    _ = &noise;
-    var seed = arg_seed;
-    _ = &seed;
-    var i: c_int = 0;
-    _ = &i;
+/// Initialize a Perlin noise generator using the Java LCG RNG.
+/// Sets up the 256-entry permutation table via Fisher-Yates shuffle,
+/// and precomputes the y=0 interpolation constants (h2, d2, t2).
+pub fn perlinInit(noise: [*c]PerlinNoise, seed: [*c]u64) void {
     noise.*.a = nextDouble(seed) * 256.0;
     noise.*.b = nextDouble(seed) * 256.0;
     noise.*.c = nextDouble(seed) * 256.0;
     noise.*.amplitude = 1.0;
     noise.*.lacunarity = 1.0;
-    var idx: [*c]u8 = @as([*c]u8, @ptrCast(@alignCast(&noise.*.d)));
-    _ = &idx;
-    {
-        i = 0;
-        while (i < @as(c_int, 256)) : (i += 1) {
-            (blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* = @as(u8, @bitCast(@as(i8, @truncate(i))));
-        }
+
+    // Identity permutation
+    for (0..256) |i| {
+        noise.*.d[i] = @intCast(i);
     }
-    {
-        i = 0;
-        while (i < @as(c_int, 256)) : (i += 1) {
-            var j: c_int = nextInt(seed, @as(c_int, 256) - i) + i;
-            _ = &j;
-            var n: u8 = (blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).*;
-            _ = &n;
-            (blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* = (blk: {
-                const tmp = j;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).*;
-            (blk: {
-                const tmp = j;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* = n;
-        }
+    // Fisher-Yates shuffle
+    for (0..256) |i| {
+        const j: usize = @intCast(nextInt(seed, @as(c_int, @intCast(256 - i))) + @as(c_int, @intCast(i)));
+        const tmp = noise.*.d[i];
+        noise.*.d[i] = noise.*.d[j];
+        noise.*.d[j] = tmp;
     }
-    idx[@as(c_uint, @intCast(@as(c_int, 256)))] = idx[@as(c_uint, @intCast(@as(c_int, 0)))];
-    var @"i2": f64 = floor(noise.*.b);
-    _ = &@"i2";
-    var d2: f64 = noise.*.b - @"i2";
-    _ = &d2;
-    noise.*.h2 = @as(u8, @bitCast(@as(i8, @truncate(@as(c_int, @intFromFloat(@"i2"))))));
-    noise.*.d2 = d2;
-    noise.*.t2 = ((d2 * d2) * d2) * ((d2 * ((d2 * 6.0) - 15.0)) + 10.0);
+    // Wrap: d[256] = d[0] so index h+1 works at boundary
+    noise.*.d[256] = noise.*.d[0];
+
+    // Precompute y=0 interpolation values
+    const floor_b = floor(noise.*.b);
+    const frac_b = noise.*.b - floor_b;
+    noise.*.h2 = @as(u8, @bitCast(@as(i8, @truncate(@as(c_int, @intFromFloat(floor_b))))));
+    noise.*.d2 = frac_b;
+    noise.*.t2 = (frac_b * frac_b * frac_b) * (frac_b * (frac_b * 6.0 - 15.0) + 10.0);
 }
-pub fn xPerlinInit(arg_noise: [*c]PerlinNoise, arg_xr: [*c]Xoroshiro) void {
-    var noise = arg_noise;
-    _ = &noise;
-    var xr = arg_xr;
-    _ = &xr;
-    var i: c_int = 0;
-    _ = &i;
+/// Initialize a Perlin noise generator using the Xoroshiro128++ RNG.
+/// Same permutation-table setup as perlinInit but uses xNextDouble/xNextInt.
+pub fn xPerlinInit(noise: [*c]PerlinNoise, xr: [*c]Xoroshiro) void {
     noise.*.a = xNextDouble(xr) * 256.0;
     noise.*.b = xNextDouble(xr) * 256.0;
     noise.*.c = xNextDouble(xr) * 256.0;
     noise.*.amplitude = 1.0;
     noise.*.lacunarity = 1.0;
-    var idx: [*c]u8 = @as([*c]u8, @ptrCast(@alignCast(&noise.*.d)));
-    _ = &idx;
-    {
-        i = 0;
-        while (i < @as(c_int, 256)) : (i += 1) {
-            (blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* = @as(u8, @bitCast(@as(i8, @truncate(i))));
-        }
+
+    // Identity permutation
+    for (0..256) |i| {
+        noise.*.d[i] = @intCast(i);
     }
-    {
-        i = 0;
-        while (i < @as(c_int, 256)) : (i += 1) {
-            var j: c_int = xNextInt(xr, @as(u32, @bitCast(@as(c_int, 256) - i))) + i;
-            _ = &j;
-            var n: u8 = (blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).*;
-            _ = &n;
-            (blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* = (blk: {
-                const tmp = j;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).*;
-            (blk: {
-                const tmp = j;
-                if (tmp >= 0) break :blk idx + @as(usize, @intCast(tmp)) else break :blk idx - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).* = n;
-        }
+    // Fisher-Yates shuffle
+    for (0..256) |i| {
+        const j: usize = @intCast(xNextInt(xr, @as(u32, @intCast(256 - i))) + @as(c_int, @intCast(i)));
+        const tmp = noise.*.d[i];
+        noise.*.d[i] = noise.*.d[j];
+        noise.*.d[j] = tmp;
     }
-    idx[@as(c_uint, @intCast(@as(c_int, 256)))] = idx[@as(c_uint, @intCast(@as(c_int, 0)))];
-    var @"i2": f64 = floor(noise.*.b);
-    _ = &@"i2";
-    var d2: f64 = noise.*.b - @"i2";
-    _ = &d2;
-    noise.*.h2 = @as(u8, @bitCast(@as(i8, @truncate(@as(c_int, @intFromFloat(@"i2"))))));
-    noise.*.d2 = d2;
-    noise.*.t2 = ((d2 * d2) * d2) * ((d2 * ((d2 * 6.0) - 15.0)) + 10.0);
+    // Wrap: d[256] = d[0]
+    noise.*.d[256] = noise.*.d[0];
+
+    // Precompute y=0 interpolation values
+    const floor_b = floor(noise.*.b);
+    const frac_b = noise.*.b - floor_b;
+    noise.*.h2 = @as(u8, @bitCast(@as(i8, @truncate(@as(c_int, @intFromFloat(floor_b))))));
+    noise.*.d2 = frac_b;
+    noise.*.t2 = (frac_b * frac_b * frac_b) * (frac_b * (frac_b * 6.0 - 15.0) + 10.0);
 }
 pub fn samplePerlin(arg_noise: [*c]const PerlinNoise, arg_d1: f64, arg_d2: f64, arg_d3: f64, arg_yamp: f64, arg_ymin: f64) f64 {
     var noise = arg_noise;
@@ -625,255 +521,111 @@ pub fn sampleSimplex2D(arg_noise: [*c]const PerlinNoise, arg_x: f64, arg_y: f64)
     t += simplexGrad(@import("std").zig.c_translation.signedRemainder(gi2, @as(c_int, 12)), x2, y2, 0.0, 0.5);
     return 70.0 * t;
 }
-pub fn octaveInit(arg_noise: [*c]OctaveNoise, arg_seed: [*c]u64, arg_octaves: [*c]PerlinNoise, arg_omin: c_int, arg_len: c_int) void {
-    var noise = arg_noise;
-    _ = &noise;
-    var seed = arg_seed;
-    _ = &seed;
-    var octaves = arg_octaves;
-    _ = &octaves;
-    var omin = arg_omin;
-    _ = &omin;
-    var len = arg_len;
-    _ = &len;
-    var i: c_int = undefined;
-    _ = &i;
-    var end: c_int = (omin + len) - @as(c_int, 1);
-    _ = &end;
-    var persist: f64 = 1.0 / (@as(f64, @floatFromInt(@as(c_longlong, 1) << @intCast(len))) - 1.0);
-    _ = &persist;
+/// Initialize a multi-octave Perlin noise generator (Java LCG).
+/// omin is the starting octave (negative = higher frequency), len is the count.
+pub fn octaveInit(noise: [*c]OctaveNoise, seed: [*c]u64, octaves: [*c]PerlinNoise, omin: c_int, len: c_int) void {
+    const end = omin + len - 1;
+    var persist: f64 = 1.0 / (@as(f64, @floatFromInt(@as(i64, 1) << @intCast(len))) - 1.0);
     var lacuna: f64 = pow(2.0, @as(f64, @floatFromInt(end)));
-    _ = &lacuna;
-    if ((len < @as(c_int, 1)) or (end > @as(c_int, 0))) {
+
+    if (len < 1 or end > 0) {
         _ = printf("octavePerlinInit(): unsupported octave range\n");
         return;
     }
-    if (end == @as(c_int, 0)) {
-        perlinInit(&octaves[@as(c_uint, @intCast(@as(c_int, 0)))], seed);
-        octaves[@as(c_uint, @intCast(@as(c_int, 0)))].amplitude = persist;
-        octaves[@as(c_uint, @intCast(@as(c_int, 0)))].lacunarity = lacuna;
+
+    var i: c_int = 0;
+    if (end == 0) {
+        perlinInit(&octaves[0], seed);
+        octaves[0].amplitude = persist;
+        octaves[0].lacunarity = lacuna;
         persist *= 2.0;
         lacuna *= 0.5;
         i = 1;
     } else {
-        skipNextN(seed, @as(u64, @bitCast(@as(c_long, -end * @as(c_int, 262)))));
-        i = 0;
+        skipNextN(seed, @as(u64, @bitCast(@as(i64, -@as(i64, end) * 262))));
     }
+
     while (i < len) : (i += 1) {
-        perlinInit(&(blk: {
-            const tmp = i;
-            if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).*, seed);
-        (blk: {
-            const tmp = i;
-            if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).*.amplitude = persist;
-        (blk: {
-            const tmp = i;
-            if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).*.lacunarity = lacuna;
+        const idx: usize = @intCast(i);
+        perlinInit(&octaves[idx], seed);
+        octaves[idx].amplitude = persist;
+        octaves[idx].lacunarity = lacuna;
         persist *= 2.0;
         lacuna *= 0.5;
     }
     noise.*.octaves = octaves;
     noise.*.octcnt = len;
 }
-pub fn octaveInitBeta(arg_noise: [*c]OctaveNoise, arg_seed: [*c]u64, arg_octaves: [*c]PerlinNoise, arg_octcnt: c_int, arg_lac: f64, arg_lacMul: f64, arg_persist: f64, arg_persistMul: f64) void {
-    var noise = arg_noise;
-    _ = &noise;
-    var seed = arg_seed;
-    _ = &seed;
-    var octaves = arg_octaves;
-    _ = &octaves;
-    var octcnt = arg_octcnt;
-    _ = &octcnt;
-    var lac = arg_lac;
-    _ = &lac;
-    var lacMul = arg_lacMul;
-    _ = &lacMul;
-    var persist = arg_persist;
-    _ = &persist;
-    var persistMul = arg_persistMul;
-    _ = &persistMul;
-    var i: c_int = undefined;
-    _ = &i;
-    {
-        i = 0;
-        while (i < octcnt) : (i += 1) {
-            perlinInit(&(blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).*, seed);
-            (blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).*.amplitude = persist;
-            (blk: {
-                const tmp = i;
-                if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-            }).*.lacunarity = lac;
-            persist *= persistMul;
-            lac *= lacMul;
-        }
+
+/// Initialize a multi-octave Perlin noise generator for Beta 1.7 terrain.
+pub fn octaveInitBeta(noise: [*c]OctaveNoise, seed: [*c]u64, octaves: [*c]PerlinNoise, octcnt: c_int, lac_arg: f64, lacMul: f64, persist_arg: f64, persistMul: f64) void {
+    var lac = lac_arg;
+    var persist = persist_arg;
+    var i: c_int = 0;
+    while (i < octcnt) : (i += 1) {
+        const idx: usize = @intCast(i);
+        perlinInit(&octaves[idx], seed);
+        octaves[idx].amplitude = persist;
+        octaves[idx].lacunarity = lac;
+        persist *= persistMul;
+        lac *= lacMul;
     }
     noise.*.octaves = octaves;
     noise.*.octcnt = octcnt;
 }
-pub fn xOctaveInit(arg_noise: [*c]OctaveNoise, arg_xr: [*c]Xoroshiro, arg_octaves: [*c]PerlinNoise, arg_amplitudes: [*c]const f64, arg_omin: c_int, arg_len: c_int, arg_nmax: c_int) c_int {
-    var noise = arg_noise;
-    _ = &noise;
-    var xr = arg_xr;
-    _ = &xr;
-    var octaves = arg_octaves;
-    _ = &octaves;
-    var amplitudes = arg_amplitudes;
-    _ = &amplitudes;
-    var omin = arg_omin;
-    _ = &omin;
-    var len = arg_len;
-    _ = &len;
-    var nmax = arg_nmax;
-    _ = &nmax;
-    const md5_octave_n = struct {
-        const static: [13][2]u64 = [13][2]u64{
-            [2]u64{
-                12797222860775040626,
-                @as(u64, @bitCast(@as(c_long, 8900461776529241512))),
-            },
-            [2]u64{
-                @as(u64, @bitCast(@as(c_long, 1141530288128540355))),
-                @as(u64, @bitCast(@as(c_long, 8405022147954297016))),
-            },
-            [2]u64{
-                @as(u64, @bitCast(@as(c_long, 3950544105335881394))),
-                @as(u64, @bitCast(@as(c_long, 6623051330073944938))),
-            },
-            [2]u64{
-                @as(u64, @bitCast(@as(c_long, 589938935082149425))),
-                @as(u64, @bitCast(@as(c_long, 5662732952352513153))),
-            },
-            [2]u64{
-                @as(u64, @bitCast(@as(c_long, 1078206144088113246))),
-                @as(u64, @bitCast(@as(c_long, 5239585857299060288))),
-            },
-            [2]u64{
-                17371061141547152719,
-                @as(u64, @bitCast(@as(c_long, 2700503254851170474))),
-            },
-            [2]u64{
-                16509238346663192164,
-                @as(u64, @bitCast(@as(c_long, 6887262389667105861))),
-            },
-            [2]u64{
-                @as(u64, @bitCast(@as(c_long, 7888980432583755018))),
-                @as(u64, @bitCast(@as(c_long, 3328269827262531447))),
-            },
-            [2]u64{
-                13659652104088827746,
-                13867453877334791309,
-            },
-            [2]u64{
-                @as(u64, @bitCast(@as(c_long, 6040343492819601496))),
-                13605873274787879742,
-            },
-            [2]u64{
-                13016051061665261435,
-                @as(u64, @bitCast(@as(c_long, 162122330481997252))),
-            },
-            [2]u64{
-                16139250376305407496,
-                13382012087969406121,
-            },
-            [2]u64{
-                15350246687196007804,
-                @as(u64, @bitCast(@as(c_long, 7932617871068508937))),
-            },
-        };
+/// Initialize a multi-octave Perlin noise generator using Xoroshiro128++.
+/// Each octave is seeded by XOR-ing the base xoroshiro state with a per-octave
+/// MD5-derived constant. Octaves with zero amplitude are skipped.
+pub fn xOctaveInit(noise: [*c]OctaveNoise, xr: [*c]Xoroshiro, octaves: [*c]PerlinNoise, amplitudes: [*c]const f64, omin: c_int, len: c_int, nmax: c_int) c_int {
+    // MD5-derived per-octave XOR constants (octaves -12 through 0)
+    const md5_octave_n = [13][2]u64{
+        .{ 12797222860775040626, 8900461776529241512 },
+        .{ 1141530288128540355, 8405022147954297016 },
+        .{ 3950544105335881394, 6623051330073944938 },
+        .{ 589938935082149425, 5662732952352513153 },
+        .{ 1078206144088113246, 5239585857299060288 },
+        .{ 17371061141547152719, 2700503254851170474 },
+        .{ 16509238346663192164, 6887262389667105861 },
+        .{ 7888980432583755018, 3328269827262531447 },
+        .{ 13659652104088827746, 13867453877334791309 },
+        .{ 6040343492819601496, 13605873274787879742 },
+        .{ 13016051061665261435, 162122330481997252 },
+        .{ 16139250376305407496, 13382012087969406121 },
+        .{ 15350246687196007804, 7932617871068508937 },
     };
-    _ = &md5_octave_n;
-    const lacuna_ini = struct {
-        const static: [13]f64 = [13]f64{
-            1,
-            0.5,
-            0.25,
-            1.0 / 8.0,
-            1.0 / 16.0,
-            1.0 / 32.0,
-            1.0 / 64.0,
-            1.0 / 128.0,
-            1.0 / 256.0,
-            1.0 / 512.0,
-            1.0 / 1024.0,
-            1.0 / 2048.0,
-            1.0 / 4096.0,
-        };
+    const lacuna_ini = [13]f64{
+        1, 0.5, 0.25, 1.0 / 8.0, 1.0 / 16.0, 1.0 / 32.0, 1.0 / 64.0,
+        1.0 / 128.0, 1.0 / 256.0, 1.0 / 512.0, 1.0 / 1024.0, 1.0 / 2048.0, 1.0 / 4096.0,
     };
-    _ = &lacuna_ini;
-    const persist_ini = struct {
-        const static: [10]f64 = [10]f64{
-            0,
-            1,
-            2.0 / 3.0,
-            4.0 / 7.0,
-            8.0 / 15.0,
-            16.0 / 31.0,
-            32.0 / 63.0,
-            64.0 / 127.0,
-            128.0 / 255.0,
-            256.0 / 511.0,
-        };
+    const persist_ini = [10]f64{
+        0, 1, 2.0 / 3.0, 4.0 / 7.0, 8.0 / 15.0, 16.0 / 31.0, 32.0 / 63.0,
+        64.0 / 127.0, 128.0 / 255.0, 256.0 / 511.0,
     };
-    _ = &persist_ini;
-    var lacuna: f64 = lacuna_ini.static[@as(c_uint, @intCast(-omin))];
-    _ = &lacuna;
-    var persist: f64 = persist_ini.static[@as(c_uint, @intCast(len))];
-    _ = &persist;
-    var xlo: u64 = xNextLong(xr);
-    _ = &xlo;
-    var xhi: u64 = xNextLong(xr);
-    _ = &xhi;
+
+    var lacuna: f64 = lacuna_ini[@intCast(-omin)];
+    var persist: f64 = persist_ini[@intCast(len)];
+    const xlo = xNextLong(xr);
+    const xhi = xNextLong(xr);
+
     var i: c_int = 0;
-    _ = &i;
     var n: c_int = 0;
-    _ = &n;
-    while ((i < len) and (n != nmax)) : (_ = blk: {
-        _ = blk_1: {
-            i += 1;
-            break :blk_1 blk_2: {
-                const ref = &lacuna;
-                ref.* *= 2.0;
-                break :blk_2 ref.*;
-            };
-        };
-        break :blk blk_1: {
-            const ref = &persist;
-            ref.* *= 0.5;
-            break :blk_1 ref.*;
-        };
+    while (i < len and n != nmax) : ({
+        i += 1;
+        lacuna *= 2.0;
+        persist *= 0.5;
     }) {
-        if ((blk: {
-            const tmp = i;
-            if (tmp >= 0) break :blk amplitudes + @as(usize, @intCast(tmp)) else break :blk amplitudes - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).* == 0.0) continue;
-        var pxr: Xoroshiro = undefined;
-        _ = &pxr;
-        pxr.lo = xlo ^ md5_octave_n.static[@as(c_uint, @intCast((@as(c_int, 12) + omin) + i))][@as(c_uint, @intCast(@as(c_int, 0)))];
-        pxr.hi = xhi ^ md5_octave_n.static[@as(c_uint, @intCast((@as(c_int, 12) + omin) + i))][@as(c_uint, @intCast(@as(c_int, 1)))];
-        xPerlinInit(&(blk: {
-            const tmp = n;
-            if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).*, &pxr);
-        (blk: {
-            const tmp = n;
-            if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).*.amplitude = (blk: {
-            const tmp = i;
-            if (tmp >= 0) break :blk amplitudes + @as(usize, @intCast(tmp)) else break :blk amplitudes - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).* * persist;
-        (blk: {
-            const tmp = n;
-            if (tmp >= 0) break :blk octaves + @as(usize, @intCast(tmp)) else break :blk octaves - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).*.lacunarity = lacuna;
+        const ai: usize = @intCast(i);
+        if (amplitudes[ai] == 0.0) continue;
+
+        const oct_idx: usize = @intCast(12 + omin + i);
+        var pxr = Xoroshiro{
+            .lo = xlo ^ md5_octave_n[oct_idx][0],
+            .hi = xhi ^ md5_octave_n[oct_idx][1],
+        };
+        const ni: usize = @intCast(n);
+        xPerlinInit(&octaves[ni], &pxr);
+        octaves[ni].amplitude = amplitudes[ai] * persist;
+        octaves[ni].lacunarity = lacuna;
         n += 1;
     }
     noise.*.octaves = octaves;
@@ -945,86 +697,43 @@ pub fn sampleOctaveBeta17Terrain(arg_noise: [*c]const OctaveNoise, arg_v: [*c]f6
         }
     }
 }
-pub fn doublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_seed: [*c]u64, arg_octavesA: [*c]PerlinNoise, arg_octavesB: [*c]PerlinNoise, arg_omin: c_int, arg_len: c_int) void {
-    var noise = arg_noise;
-    _ = &noise;
-    var seed = arg_seed;
-    _ = &seed;
-    var octavesA = arg_octavesA;
-    _ = &octavesA;
-    var octavesB = arg_octavesB;
-    _ = &octavesB;
-    var omin = arg_omin;
-    _ = &omin;
-    var len = arg_len;
-    _ = &len;
-    noise.*.amplitude = ((10.0 / 6.0) * @as(f64, @floatFromInt(len))) / @as(f64, @floatFromInt(len + @as(c_int, 1)));
+/// Initialize a DoublePerlinNoise (two octave sets added together) using Java LCG.
+pub fn doublePerlinInit(noise: [*c]DoublePerlinNoise, seed: [*c]u64, octavesA: [*c]PerlinNoise, octavesB: [*c]PerlinNoise, omin: c_int, len: c_int) void {
+    noise.*.amplitude = (10.0 / 6.0) * @as(f64, @floatFromInt(len)) / @as(f64, @floatFromInt(len + 1));
     octaveInit(&noise.*.octA, seed, octavesA, omin, len);
     octaveInit(&noise.*.octB, seed, octavesB, omin, len);
 }
-pub fn xDoublePerlinInit(arg_noise: [*c]DoublePerlinNoise, arg_xr: [*c]Xoroshiro, arg_octaves: [*c]PerlinNoise, arg_amplitudes: [*c]const f64, arg_omin: c_int, arg_len: c_int, arg_nmax: c_int) c_int {
-    var noise = arg_noise;
-    _ = &noise;
-    var xr = arg_xr;
-    _ = &xr;
-    var octaves = arg_octaves;
-    _ = &octaves;
-    var amplitudes = arg_amplitudes;
-    _ = &amplitudes;
-    var omin = arg_omin;
-    _ = &omin;
-    var len = arg_len;
-    _ = &len;
-    var nmax = arg_nmax;
-    _ = &nmax;
-    var i: c_int = undefined;
-    _ = &i;
-    var n: c_int = 0;
-    _ = &n;
-    var na: c_int = -@as(c_int, 1);
-    _ = &na;
-    var nb: c_int = -@as(c_int, 1);
-    _ = &nb;
-    if (nmax > @as(c_int, 0)) {
-        na = (nmax + @as(c_int, 1)) >> @intCast(1);
+
+/// Initialize a DoublePerlinNoise using Xoroshiro128++ (MC >= 1.18).
+/// Allocates octaves for both halves from a single contiguous array.
+pub fn xDoublePerlinInit(noise: [*c]DoublePerlinNoise, xr: [*c]Xoroshiro, octaves: [*c]PerlinNoise, amplitudes: [*c]const f64, omin: c_int, len_arg: c_int, nmax: c_int) c_int {
+    var len = len_arg;
+    var na: c_int = -1;
+    var nb: c_int = -1;
+    if (nmax > 0) {
+        na = (nmax + 1) >> 1;
         nb = nmax - na;
     }
-    n += xOctaveInit(&noise.*.octA, xr, octaves + @as(usize, @bitCast(@as(isize, @intCast(n)))), amplitudes, omin, len, na);
-    n += xOctaveInit(&noise.*.octB, xr, octaves + @as(usize, @bitCast(@as(isize, @intCast(n)))), amplitudes, omin, len, nb);
-    {
-        i = len - @as(c_int, 1);
-        while ((i >= @as(c_int, 0)) and ((blk: {
-            const tmp = i;
-            if (tmp >= 0) break :blk amplitudes + @as(usize, @intCast(tmp)) else break :blk amplitudes - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).* == 0.0)) : (i -= 1) {
-            len -= 1;
-        }
+    var n: c_int = 0;
+    n += xOctaveInit(&noise.*.octA, xr, octaves + @as(usize, @intCast(n)), amplitudes, omin, len, na);
+    n += xOctaveInit(&noise.*.octB, xr, octaves + @as(usize, @intCast(n)), amplitudes, omin, len, nb);
+
+    // Trim trailing zero amplitudes to find effective length
+    var i = len - 1;
+    while (i >= 0 and amplitudes[@intCast(i)] == 0.0) : (i -= 1) {
+        len -= 1;
     }
-    {
-        i = 0;
-        while ((blk: {
-            const tmp = i;
-            if (tmp >= 0) break :blk amplitudes + @as(usize, @intCast(tmp)) else break :blk amplitudes - ~@as(usize, @bitCast(@as(isize, @intCast(tmp)) +% -1));
-        }).* == 0.0) : (i += 1) {
-            len -= 1;
-        }
+    // Trim leading zero amplitudes
+    i = 0;
+    while (amplitudes[@intCast(i)] == 0.0) : (i += 1) {
+        len -= 1;
     }
-    const amp_ini = struct {
-        const static: [10]f64 = [10]f64{
-            0,
-            5.0 / 6.0,
-            10.0 / 9.0,
-            15.0 / 12.0,
-            20.0 / 15.0,
-            25.0 / 18.0,
-            30.0 / 21.0,
-            35.0 / 24.0,
-            40.0 / 27.0,
-            45.0 / 30.0,
-        };
+
+    const amp_ini = [10]f64{
+        0, 5.0 / 6.0, 10.0 / 9.0, 15.0 / 12.0, 20.0 / 15.0,
+        25.0 / 18.0, 30.0 / 21.0, 35.0 / 24.0, 40.0 / 27.0, 45.0 / 30.0,
     };
-    _ = &amp_ini;
-    noise.*.amplitude = amp_ini.static[@as(c_uint, @intCast(len))];
+    noise.*.amplitude = amp_ini[@intCast(len)];
     return n;
 }
 pub fn sampleDoublePerlin(noise: [*c]const DoublePerlinNoise, x: f64, y: f64, z: f64) f64 {
