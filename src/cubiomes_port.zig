@@ -1577,39 +1577,33 @@ pub const struct_LayerStack = extern struct {
     oceanRnd: PerlinNoise = @import("std").mem.zeroes(PerlinNoise),
 };
 pub const LayerStack = struct_LayerStack;
-pub fn setLayerSeed(arg_layer: [*c]Layer, arg_worldSeed: u64) void {
-    var layer = arg_layer;
-    _ = &layer;
-    var worldSeed = arg_worldSeed;
-    _ = &worldSeed;
-    if (layer.*.p2 != @as([*c]Layer, @ptrCast(@alignCast(@as(?*anyopaque, @ptrFromInt(@as(c_int, 0))))))) {
+pub fn setLayerSeed(layer: [*c]Layer, worldSeed: u64) void {
+    if (layer.*.p2 != null) {
         setLayerSeed(layer.*.p2, worldSeed);
     }
-    if (layer.*.p != @as([*c]Layer, @ptrCast(@alignCast(@as(?*anyopaque, @ptrFromInt(@as(c_int, 0))))))) {
+    if (layer.*.p != null) {
         setLayerSeed(layer.*.p, worldSeed);
     }
-    if (layer.*.noise != @as(?*anyopaque, @ptrFromInt(@as(c_int, 0)))) {
+    if (layer.*.noise != null) {
         var s: u64 = undefined;
-        _ = &s;
         setSeed(&s, worldSeed);
         perlinInit(@as([*c]PerlinNoise, @ptrCast(@alignCast(layer.*.noise))), &s);
     }
-    var ls: u64 = layer.*.layerSalt;
-    _ = &ls;
-    if (ls == @as(u64, @bitCast(@as(c_long, @as(c_int, 0))))) {
+
+    const ls = layer.*.layerSalt;
+    if (ls == 0) {
         layer.*.startSalt = 0;
         layer.*.startSeed = 0;
-    } else if (@as(c_ulonglong, @bitCast(@as(c_ulonglong, ls))) == ~@as(c_ulonglong, 0)) {
+    } else if (ls == @import("std").math.maxInt(u64)) {
         layer.*.startSalt = getVoronoiSHA(worldSeed);
         layer.*.startSeed = 0;
     } else {
-        var st: u64 = worldSeed;
-        _ = &st;
+        var st = worldSeed;
         st = mcStepSeed(st, ls);
         st = mcStepSeed(st, ls);
         st = mcStepSeed(st, ls);
         layer.*.startSalt = st;
-        layer.*.startSeed = mcStepSeed(st, @as(u64, @bitCast(@as(c_long, @as(c_int, 0)))));
+        layer.*.startSeed = mcStepSeed(st, 0);
     }
 }
 pub fn mapContinent(_: [*c]const Layer, out: [*c]c_int, _: c_int, _: c_int, w: c_int, h: c_int) c_int {
