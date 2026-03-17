@@ -1,4 +1,11 @@
+<img src="assets/logo.svg" width="120" alt="minecraft-seed-finder logo" />
+
 # minecraft-seed-finder
+
+[![CI](https://img.shields.io/github/actions/workflow/status/kljensen/minecraft-seed-finder/ci.yml?branch=main&label=CI)](https://github.com/kljensen/minecraft-seed-finder/actions/workflows/ci.yml)
+[![Zig 0.14.0+](https://img.shields.io/badge/Zig-0.14.0%2B-F7A41D?logo=zig&logoColor=white)](https://ziglang.org/)
+[![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue)](https://unlicense.org/)
+[![Minecraft: Bedrock + Java](https://img.shields.io/badge/Minecraft-Bedrock%20%2B%20Java-5C8B22)](https://minecraft.net)
 
 A Minecraft seed finder written in Zig. Search for seeds by biome, structure,
 or any combination using boolean expressions.
